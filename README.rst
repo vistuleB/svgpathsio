@@ -1,9 +1,17 @@
 
-svgpathtools
-============
+svgpathtools offset and stroke fork!
+====================================
 
-svgpathtools is a collection of tools for manipulating and analyzing SVG
+This is a (hopefully, temporary) fork of mathandy/svgpathtools, 
+a collection of tools for manipulating and analyzing SVG
 Path objects and Bézier curves.
+
+Mainly, this fork adds proper support for subpaths as well
+as stroke and offset utilities. Various other small details of the API
+have been improved.
+
+Nb: Much of this README is taken from the original mathandy/svgpathtools
+README.
 
 Features
 --------
@@ -13,30 +21,38 @@ display SVG files** as well as *a large selection of
 geometrically-oriented tools* to **transform and analyze path
 elements**.
 
-Additionally, the submodule *bezier.py* contains tools for for working
+Additionally, the submodule *bezier.py* contains tools for working
 with general **nth order Bezier curves stored as n-tuples**.
 
-Some included tools:
+Some tools included in this fork:
 
 -  **read**, **write**, and **display** SVG files containing Path (and
    other) SVG elements
--  convert Bézier path segments to **numpy.poly1d** (polynomial) objects
--  convert polynomials (in standard form) to their Bézier form
 -  compute **tangent vectors** and (right-hand rule) **normal vectors**
 -  compute **curvature**
--  break discontinuous paths into their **continuous subpaths**.
--  efficiently compute **intersections** between paths and/or segments
--  find a **bounding box** for a path or segment
+-  break a path into its **continuous subpath** components, or vice-versa
+   **assemble a path from arbitrary subpaths**
+-  manipulate the **closure** or **non-closure** ('Z') of subpaths
+-  compute **intersections** between paths and/or segments
+-  find a **bounding box** for a path, subpath or segment
 -  **reverse** segment/path orientation
 -  **crop** and **split** paths and segments
 -  **smooth** paths (i.e. smooth away kinks to make paths
    differentiable)
--  **transition maps** from path domain to segment domain and back (T2t
-   and t2T)
+-  generate **strokes** and **offsets** of paths, using any of the standard
+   SVG stroke options for 'join' and 'cap'
+-  apply arbitrary **svg transformations** to a path; flatten
+   documents
 -  compute **area** enclosed by a closed path
+-  **convert** elliptical arc segments to bezier-based subpaths (to
+   desired accuracy)
 -  compute **arc length**
 -  compute **inverse arc length**
--  convert RGB color tuples to hexadecimal color strings and back
+-  **transition maps** between path, subpath and segment coordinates
+-  convert Bézier path segments to **numpy.poly1d** (polynomial) objects
+-  convert polynomials (in standard form) to their Bézier form
+-  convenience functions, such the generation of hexadecimal color
+   codes from RGB color tuples and back
 
 Prerequisites
 -------------
@@ -44,72 +60,68 @@ Prerequisites
 -  **numpy**
 -  **svgwrite**
 
-Setup
------
+Installation
+------------
 
-If not already installed, you can **install the prerequisites** using
-pip.
-
-.. code:: bash
-
-    $ pip install numpy
-
-.. code:: bash
-
-    $ pip install svgwrite
-
-Then **install svgpathtools**:
-
-.. code:: bash
-
-    $ pip install svgpathtools
-
-Alternative Setup
-~~~~~~~~~~~~~~~~~
-
-You can download the source from Github and install by using the command
-(from inside the folder containing setup.py):
-
-.. code:: bash
-
-    $ python setup.py install
-
-Credit where credit's due
--------------------------
-
-Much of the core of this module was taken from `the svg.path (v2.0)
-module <https://github.com/regebro/svg.path>`__. Interested svg.path
-users should see the compatibility notes at bottom of this readme.
+Start by installing the original mathandy/svgpathtools. Then
+replace the whole contents of the source directory (located e.g. at
+`/opt/local/Library/Frameworks/Python.framework/Versions/3.6/lib/python3.6/site-packages/svgpathtools/`
+on my machine) with the contents of this repo's `svgpathtools` folder ;)
 
 Basic Usage
 -----------
 
-Classes
-~~~~~~~
+Points in the plane are specified as complex numbers, following
+Python's native support of complex numbers.
+
+E.g., ``100+200j``
+encodes a point with x-coordinate 100 and y-coordinate 200.
 
 The svgpathtools module is primarily structured around four path segment
 classes: ``Line``, ``QuadraticBezier``, ``CubicBezier``, and ``Arc``.
-There is also a fifth class, ``Path``, whose objects are sequences of
-(connected or disconnected\ `1 <#f1>`__\ ) path segment objects.
+Instances of these classes are called *segments*. There is also a superclass
+``Segment`` from which these four classes inherit, but an abstract ``Segment``
+cannot be instantiated.
+
+The module also contains two container classes, ``Path`` and ``Subpath``.
+A ``Subpath`` object contains a list of end-to-end segments, possibly
+forming a closed loop. Finally, a ``Path`` contains an arbitrary list of subpaths.
+
+For example, an SVG path such as 
+
+``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z`` (1)
+
+would end up modeled as a ``Path`` containing two ``Subpath``s each being a
+sequence of four ``Line`` objects. In this case each Subpath is
+topologically closed---i.e., a loop---because of the 'Z's, but note that
+if we write
+
+``M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0`` (2)
+
+then the two subpaths that are "topologically open", despite also representing
+closed squares, geometrically speaking. In fact, path (1) will render as
+
+whereas path (2) will render as
+
+
+The constructors for these classes are invoked as follows:
 
 -  ``Line(start, end)``
 
--  ``Arc(start, radius, rotation, large_arc, sweep, end)`` Note: See
-   docstring for a detailed explanation of these parameters
+-  ``Arc(start, radius, rotation, large_arc, sweep, end)``  (note:
+   large_arc and sweep are boolean)
 
 -  ``QuadraticBezier(start, control, end)``
 
 -  ``CubicBezier(start, control1, control2, end)``
 
--  ``Path(*segments)``
+-  ``Subpath(*segments)``
+
+-  ``Path(*segments-or-subpaths)``
 
 See the relevant docstrings in *path.py* or the `official SVG
 specifications <http://www.w3.org/TR/SVG/paths.html>`__ for more
 information on what each parameter means.
-
-1 Warning: Some of the functionality in this library has not been tested
-on discontinuous Path objects. A simple workaround is provided, however,
-by the ``Path.continuous_subpaths()`` method. `↩ <#a1>`__
 
 .. code:: ipython2
 
@@ -118,9 +130,12 @@ by the ``Path.continuous_subpaths()`` method. `↩ <#a1>`__
 .. code:: ipython2
 
     # Coordinates are given as points in the complex plane
-    from svgpathtools import Path, Line, QuadraticBezier, CubicBezier, Arc
+    from svgpathtools import Path, Subpath, Line, QuadraticBezier, CubicBezier, Arc
     seg1 = CubicBezier(300+100j, 100+100j, 200+200j, 200+300j)  # A cubic beginning at (300, 100) and ending at (200, 300)
     seg2 = Line(200+300j, 250+350j)  # A line beginning at (200, 300) and ending at (250, 350)
+    
+    path1 = Path(Subpath(Line(200
+
     path = Path(seg1, seg2)  # A path traversing the cubic and then the line
     
     # We could alternatively created this Path object using a d-string
