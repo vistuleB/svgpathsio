@@ -259,7 +259,7 @@ class Document:
         # TODO: It might be better to use duck-typing here with a try-except
         if isinstance(path, Path):
             path_svg = path.d()
-        elif is_path_segment(path):
+        elif isinstance(path, Segment):
             path_svg = Path(path).d()
         elif isinstance(path, str):
             # Assume this is a valid d-string.

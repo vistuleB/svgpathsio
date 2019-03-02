@@ -19,11 +19,25 @@ def hex2rgb(value):
     """
     value = value.lstrip('#')
     lv = len(value)
-    return tuple(int(value[i:i+lv//3], 16) for i in range(0, lv, lv//3))
+    return tuple(int(value[i: i + lv // 3], 16) for i in range(0, lv, lv // 3))
+
+
+def _rgb_args_converter(*args):
+    rgb = []
+
+    if len(args) == 3:
+        rgb = tuple(args)
+    elif len(args) == 1:
+        rgb = tuple(args[0])
+
+    if len(rgb) != 3:
+        raise ValueError("call rgb2hex, etc, as rgb2hex(..., ..., ...) or"
+                         "else with a list/tuple of length 3")
+    return rgb
 
 
 # stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
-def rgb2hex(rgb):
+def rgb2hex(*args):
     """Converts an RGB 3-tuple to a hexadeximal color string.
 
     EXAMPLE
@@ -31,6 +45,28 @@ def rgb2hex(rgb):
     >>> rgb2hex((0,0,255))
     '#0000FF'
     """
+    try:
+        rgb = _rgb_args_converter(*args)
+    except ValueError:
+        raise
+
+    return ('#%02x%02x%02x' % rgb).upper()
+
+
+# stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
+def rgb012hex(*args):
+    """Converts an 0-1 RGB 3-tuple to a hexadeximal color string.
+
+    EXAMPLE
+    -------
+    >>> rgb2hex((0,0,255))
+    '#0000FF'
+    """
+    try:
+        rgb = _rgb_args_converter(*args)
+    except ValueError:
+        raise
+    rgb = tuple([int(255 * x) for x in rgb])
     return ('#%02x%02x%02x' % rgb).upper()
 
 
@@ -52,7 +88,7 @@ def open_in_browser(file_location):
 
     #  For some reason OSX requires this adjustment (tested on 10.10.4)
     if sys.platform == "darwin":
-        file_location = "file:///"+file_location
+        file_location = "file:///" + file_location
 
     new = 2  # open in a new tab, if possible
     webbrowser.get().open(file_location, new=new)

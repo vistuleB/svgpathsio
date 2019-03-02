@@ -24,17 +24,18 @@ class TestParser(unittest.TestCase):
     def test_svg_examples(self):
         """Examples from the SVG spec"""
         path1 = parse_path('M 100 100 L 300 100 L 200 300 z')
-        self.assertEqual(path1, Path(Line(100 + 100j, 300 + 100j),
-                                     Line(300 + 100j, 200 + 300j),
-                                     Line(200 + 300j, 100 + 100j)))
-        self.assertTrue(path1.isclosed())
+        self.assertEqual(path1, Subpath(Line(100 + 100j, 300 + 100j),
+                                        Line(300 + 100j, 200 + 300j),
+                                        Line(200 + 300j, 100 + 100j)).set_Z().path_of())
+
+        self.assertTrue(path1.isloop())
 
         # for Z command behavior when there is multiple subpaths
         path1 = parse_path('M 0 0 L 50 20 M 100 100 L 300 100 L 200 300 z')
         self.assertEqual(path1, Path(Line(0 + 0j, 50 + 20j),
-                                     Line(100 + 100j, 300 + 100j),
-                                     Line(300 + 100j, 200 + 300j),
-                                     Line(200 + 300j, 100 + 100j)))
+                                     Subpath(Line(100 + 100j, 300 + 100j),
+                                             Line(300 + 100j, 200 + 300j),
+                                             Line(200 + 300j, 100 + 100j)).set_Z()))
 
         path1 = parse_path('M 100 100 L 200 200')
         path2 = parse_path('M100 100L200 200')
@@ -105,15 +106,15 @@ class TestParser(unittest.TestCase):
                                                      1000 + 300j)))
 
         path1 = parse_path('M300,200 h-150 a150,150 0 1,0 150,-150 z')
-        self.assertEqual(path1, Path(Line(300 + 200j, 150 + 200j),
-                                Arc(150 + 200j, 150 + 150j, 0, 1, 0, 300 + 50j),
-                                Line(300 + 50j, 300 + 200j)))
+        self.assertEqual(path1, Subpath(Line(300 + 200j, 150 + 200j),
+                                        Arc(150 + 200j, 150 + 150j, 0, 1, 0, 300 + 50j),
+                                        Line(300 + 50j, 300 + 200j)).set_Z().path_of())
 
         path1 = parse_path('M275,175 v-150 a150,150 0 0,0 -150,150 z')
         self.assertEqual(path1,
-                         Path(Line(275 + 175j, 275 + 25j),
-                              Arc(275 + 25j, 150 + 150j, 0, 0, 0, 125 + 175j),
-                              Line(125 + 175j, 275 + 175j)))
+                         Subpath(Line(275 + 175j, 275 + 25j),
+                                 Arc(275 + 25j, 150 + 150j, 0, 0, 0, 125 + 175j),
+                                 Line(125 + 175j, 275 + 175j)).set_Z().path_of())
 
         path1 = parse_path("""M600,350 l 50,-25
                               a25,25 -30 0,1 50,-25 l 50,-25
@@ -136,10 +137,11 @@ class TestParser(unittest.TestCase):
 
         # Relative moveto:
         path1 = parse_path('M 0 0 L 50 20 m 50 80 L 300 100 L 200 300 z')
-        self.assertEqual(path1, Path(Line(0 + 0j, 50 + 20j),
-                                     Line(100 + 100j, 300 + 100j),
-                                     Line(300 + 100j, 200 + 300j),
-                                     Line(200 + 300j, 100 + 100j)))
+
+        self.assertEqual(path1, Path(Line(0j, 50 + 20j),
+                                     Subpath(Line(100 + 100j, 300 + 100j),
+                                             Line(300 + 100j, 200 + 300j),
+                                             Line(200 + 300j, 100 + 100j)).set_Z()))
 
         # Initial smooth and relative CubicBezier
         path1 = parse_path("""M100,200 s 150,-100 150,0""")
@@ -181,9 +183,7 @@ class TestParser(unittest.TestCase):
         self.assertRaises(ValueError, parse_path,
                           'M 100 100 L 200 200 Z 100 200')
 
-
     def test_transform(self):
-
         tf_matrix = svgpathtools.parser.parse_transform(
             'matrix(1.0 2.0 3.0 4.0 5.0 6.0)')
         expected_tf_matrix = np.identity(3)
@@ -230,7 +230,7 @@ class TestParser(unittest.TestCase):
         ))
 
         expected_tf_skewx = np.identity(3)
-        expected_tf_skewx[0, 1] = np.tan(40.0 * np.pi/180.0)
+        expected_tf_skewx[0, 1] = np.tan(40.0 * np.pi / 180.0)
         tf_skewx = svgpathtools.parser.parse_transform('skewX(40)')
         self.assertTrue(np.array_equal(expected_tf_skewx, tf_skewx))
 
@@ -247,3 +247,7 @@ class TestParser(unittest.TestCase):
                    skewX(40)
                    scale(10 0.5)""")
         ))
+
+
+if __name__ == '__main__':
+    unittest.main()

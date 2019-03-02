@@ -9,11 +9,12 @@ class HigherOrderBezier:
     def __init__(self, bpoints):
         self.bpts = bpoints
 
+    @property
     def bpoints(self):
         return self.bpts
 
     def point(self, t):
-        return bezier_point(self.bpoints(), t)
+        return bezier_point(self.bpoints, t)
 
     def __repr__(self):
         return str(self.bpts)
@@ -35,7 +36,7 @@ class TestBezier2Polynomial(unittest.TestCase):
         tvals = np.linspace(0, 1, 10)
         for d in range(1, 10):
             b = random_bezier(d)
-            p = np.poly1d(bezier2polynomial(b.bpoints()))
+            p = np.poly1d(bezier2polynomial(b.bpoints))
             for t in tvals:
                 msg = ("degree {}\nt = {}\nb(t) = {}\n = {}\np(t) = \n{}\n = {}"
                        "".format(d, t, b, b.point(t), p, p(t)))
