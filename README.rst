@@ -89,20 +89,21 @@ forming a closed loop. Finally, a ``Path`` contains an arbitrary list of subpath
 
 For example, an SVG path such as 
 
-``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z`` (1)
+``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z``   (1)
 
-would end up modeled as a ``Path`` containing two ``Subpath``s each being a
+would end up modeled as a ``Path`` containing two ``Subpath`` s each being a
 sequence of four ``Line`` objects. In this case each Subpath is
 topologically closed---i.e., a loop---because of the 'Z's, but note that
 if we write
 
-``M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0`` (2)
+``M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0``   (2)
 
 then the two subpaths that are "topologically open", despite also representing
 closed squares, geometrically speaking. In fact, path (1) will render as
 
 whereas path (2) will render as
 
+.. figure:: https://user-images.githubusercontent.com/19382247/53690716-fb380d00-3daa-11e9-95bd-88ababd8f2b1.png
 
 The constructors for these classes are invoked as follows:
 
