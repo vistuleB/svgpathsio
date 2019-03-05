@@ -287,7 +287,7 @@ class BPair(object):
         self.t2 = t2  # t value to get the mid point of this curve from cub2
 
 
-def solve_complex_linear_congruence(a, z, b, w):
+def complex_linear_congruence(a, z, b, w):
     # solves a + l * z = b + m * w for real l, m
 
     # first way, using np.matrix:
@@ -325,7 +325,7 @@ def line_by_line_intersections(l1, l2):
     b = l2[0]
     w = l2[1] - l2[0]
     try:
-        t1, t2 = solve_complex_linear_congruence(a, z, b, w)
+        t1, t2 = complex_linear_congruence(a, z, b, w)
         if 0 <= t1 <= 1 and 0 <= t2 <= 1:
             assert np.isclose(l1.point(t1), l2.point(t2))
             return [(t1, t2)]

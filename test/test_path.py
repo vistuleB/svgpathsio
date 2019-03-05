@@ -16,11 +16,9 @@ from svgpathtools import *
 
 
 class LineTest(unittest.TestCase):
-
     def test_lines(self):
-        return
-        # These points are calculated, and not just regression tests.
-
+        # These points are calculated, and not just regression
+        # tests.
         line1 = Line(0j, 400 + 0j)
         self.assertAlmostEqual(line1.point(0), 0j)
         self.assertAlmostEqual(line1.point(0.3), (120 + 0j))
@@ -264,7 +262,6 @@ class CubicBezierTest(unittest.TestCase):
         self.assertTrue(cub.length() > 300.0)
 
     def test_equality(self):
-        return
         # This is to test the __eq__ and __ne__ methods, so we can't use
         # assertEqual and assertNotEqual
         segment = CubicBezier(complex(600, 500), complex(600, 350),
@@ -355,7 +352,6 @@ class QuadraticBezierTest(unittest.TestCase):
 
 
 class ArcTest(unittest.TestCase):
-
     def test_trusting_acos(self):
         """`u1.real` is > 1 in this arc due to numerical error."""
         try:
@@ -482,7 +478,6 @@ class ArcTest(unittest.TestCase):
 
 class TestPath(unittest.TestCase):
     def test_circle(self):
-        return
         arc1 = Arc(0j, 100 + 100j, 0, 0, 0, 200 + 0j)
         arc2 = Arc(200 + 0j, 100 + 100j, 0, 0, 0, 0j)
         path = Path(arc1, arc2)
@@ -494,7 +489,6 @@ class TestPath(unittest.TestCase):
         self.assertAlmostEqual(path.length(), pi * 200)
 
     def test_svg_specs(self):
-        return
         """The paths that are in the SVG specs"""
 
         # Big pie: M300,200 h-150 a150,150 0 1,0 150,-150 z
@@ -740,7 +734,9 @@ class TestPath(unittest.TestCase):
 
         p_open = Path(Line(0, 1), Line(1, 1 + 1j), Line(1 + 1j, 1j),
                       Line(1j, 2j))
+
         self.assertTrue(p_open.cropped(0, 0.5) == first_half)
+
         with self.assertRaises(ValueError):
             p_open.cropped(.75, .25)
         with self.assertRaises(ValueError):
@@ -905,7 +901,7 @@ class Test_ilength(unittest.TestCase):
             (l, 0.99, 2.213707297724792)]
 
         for (l, t, s) in tests:
-            self.assertAlmostEqual(l.ilength(s), t)
+            self.assertAlmostEqual(l.ilength(s).t, t)
 
     def test_ilength_quadratics(self):
         q1 = QuadraticBezier(200 + 300j, 400 + 50j, 600 + 300j)
@@ -938,7 +934,7 @@ class Test_ilength(unittest.TestCase):
 
         for q, t, s in tests:
             try:
-                self.assertAlmostEqual(q.ilength(s), t)
+                self.assertAlmostEqual(q.ilength(s).t, t)
             except:
                 print(q)
                 print(s)
@@ -967,7 +963,7 @@ class Test_ilength(unittest.TestCase):
                  (closedc, 0.99, 13.681324783697782)]
 
         for (c, t, s) in tests:
-            self.assertAlmostEqual(c.ilength(s), t)
+            self.assertAlmostEqual(c.ilength(s).t, t)
 
     def test_ilength_arcs(self):
         arc1 = Arc(0j, 100 + 50j, 0, 0, 0, 100 + 50j)
@@ -1015,7 +1011,7 @@ class Test_ilength(unittest.TestCase):
                  (arc7, 0.99, 119.53485487631241)]
 
         for (c, t, s) in tests:
-            self.assertAlmostEqual(c.ilength(s), t)
+            self.assertAlmostEqual(c.ilength(s).t, t)
 
     def test_ilength_paths(self):
         line1 = Line(600 + 350j, 650 + 325j)
@@ -1115,9 +1111,10 @@ class Test_ilength(unittest.TestCase):
                  (apath, 0.8888888888888888, 78.05349627111896),
                  (apath, 1.0, 87.81018330500885)]
 
-        for (c, t, s) in tests:
+        for (c, W, s) in tests:
             try:
-                self.assertAlmostEqual(c.ilength(s), t, msg=str((c, t, s)))
+                self.assertAlmostEqual(c.ilength(s).W, W, msg=str((c, W, s)))
+
             except:
                 # These test case values were generated using a system
                 # with scipy installed -- if scipy is not installed,
@@ -1132,7 +1129,6 @@ class Test_ilength(unittest.TestCase):
 
     # Exceptional Cases
     def test_ilength_exceptions(self):
-        return
         nodalq = QuadraticBezier(1, 1, 1)
         with self.assertRaises(AssertionError):
             nodalq.ilength(1)
@@ -1365,7 +1361,7 @@ class TestPathTools(unittest.TestCase):
                                    abs(expected_points[1] - test_path.point(address))), 0)
 
     def test_farthest_point_in_path(self):
-        # Note: currently the radiialrange method is not implemented for Arc
+        # Note: currently the radialrange method is not implemented for Arc
         # objects
         # test_path = self.path_of_all_seg_types
         # origin = -123 - 123j
@@ -1378,6 +1374,7 @@ class TestPathTools(unittest.TestCase):
         pt = 300 + 300j
         expected_distance = 424.26406871192853
         expected_point = test_path.point(0)
+        # distance, address = test_path.farthest_point_from(pt)
         distance, address = test_path.farthest_point_from(pt)
         self.assertAlmostEqual(distance, expected_distance)
         self.assertAlmostEqual(test_path.point(address), expected_point)

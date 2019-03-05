@@ -5,7 +5,8 @@ from .bezier import (bezier_point, bezier2polynomial,
 
 from .path import (Path, Line, QuadraticBezier, CubicBezier, Arc,
                    Subpath, Segment, BezierSegment, bpoints2bezier,
-                   poly2bez, bbox2path, param2address)
+                   poly2bez, bbox2path, param2address, address2param,
+                   Address, ValueAddressPair)
 
 from .parser import parse_path, parse_subpath
 from .paths2svg import disvg, wsvg
@@ -14,4 +15,4 @@ from .misctools import hex2rgb, rgb2hex, rgb012hex
 from .smoothing import smoothed_path, smoothed_joint, is_differentiable, kinks
 from .svg_to_paths import svg2paths, svg2paths2
 from .document import Document, SVG_NAMESPACE
-
+from .svg_io_sax import SaxDocument

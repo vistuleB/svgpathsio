@@ -5,7 +5,7 @@ from os.path import join, dirname
 
 class TestSVG2Paths(unittest.TestCase):
     def test_svg2paths_polygons(self):
-        paths, _ = svg2paths(join(dirname(__file__), 'polygons.svg'))
+=        paths, _ = svg2paths(join(dirname(__file__), 'polygons.svg'))
 
         # triangular polygon test
         path = paths[0]
@@ -33,7 +33,6 @@ class TestSVG2Paths(unittest.TestCase):
         self.assertTrue(path == path_correct)
 
     def test_svg2paths_ellipses(self):
-
         paths, _ = svg2paths(join(dirname(__file__), 'ellipse.svg'))
 
         # ellipse tests
