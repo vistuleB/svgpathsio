@@ -22,52 +22,69 @@ def hex2rgb(value):
     return tuple(int(value[i: i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
 
-def _rgb_args_converter(*args):
-    rgb = []
-
-    if len(args) == 3:
-        rgb = tuple(args)
-    elif len(args) == 1:
-        rgb = tuple(args[0])
-
-    if len(rgb) != 3:
-        raise ValueError("call rgb2hex, etc, as rgb2hex(..., ..., ...) or"
-                         "else with a list/tuple of length 3")
-    return rgb
+def _amalgamate_args(*args):
+    a = []
+    for z in args:
+        try:
+            a.extend(z)
+        except TypeError:
+            a.append(z)
+    return a
 
 
-# stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
-def rgb2hex(*args):
-    """Converts an RGB 3-tuple to a hexadeximal color string.
-
-    EXAMPLE
-    -------
-    >>> rgb2hex((0,0,255))
-    '#0000FF'
-    """
-    try:
-        rgb = _rgb_args_converter(*args)
-    except ValueError:
-        raise
-
-    return ('#%02x%02x%02x' % rgb).upper()
+def _ints_array_to_hex(ints, upper):
+    ans = '#' if len(ints) > 1 else ''
+    for x in ints:
+        ans += '%02x' % x
+    return ans.upper() if upper else ans
 
 
 # stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
-def rgb012hex(*args):
-    """Converts an 0-1 RGB 3-tuple to a hexadeximal color string.
+def rgb2hex(*args, upper=True):
+    """Converts an RGB 1-, 3- or 4-tuple to a hexadeximal color string;
+    only prends the '#' if the tuple has length > 1
+
+    EXAMPLES
+    --------
+    >>> rgb2hex((0,0,255))
+    '#0000FF'
+    >>> rgb2hex(0, 0, 255)
+    '#0000FF'
+    >>> rgb2hex((0, 0, 255, 255))
+    '#0000FFFF'
+    >>> rgb2hex((0, 0, 255), 255)
+    '#0000FFFF'
+    >>> rgb2hex(0)
+    '00'
+    """
+    ints = _amalgamate_args(*args)
+
+    if not all(isinstance(x, int)  and 0 <= x <= 255 for x in ints):
+        raise ValueError("expecting integers in range 0-255")
+
+    return _ints_array_to_hex(ints, upper)
+
+
+# stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
+def rgb012hex(*args, upper=True):
+    """Like rgb2hex, but assumes 0-1 float values instead of 0-255 integers.
 
     EXAMPLE
     -------
-    >>> rgb2hex((0,0,255))
+    >>> rgb2hex(0, 0, 1)
     '#0000FF'
     """
-    try:
-        rgb = _rgb_args_converter(*args)
-    except ValueError:
-        raise
-    rgb = tuple([int(255 * x) for x in rgb])
-    return ('#%02x%02x%02x' % rgb).upper()
+    ints = [round(255 * x) for x in _amalgamate_args(*args)]
+
+    if not all(0 <= x <= 255 for x in ints):
+        raise ValueError("expecting floats in range 0-1")
+
+    return _ints_array_to_hex(ints, upper)
+
+
+def rgb_affine_combination(c, rgb1, rgb2):
+    assert len(rgb1) == len(rgb2)
+    return [max(0, min(255, int(c * rgb1[i] + (1 - c) * rgb2[i]))) for i in range(len(rgb1))]
 
 
 def isclose(a, b, rtol=1e-5, atol=1e-8):
@@ -79,19 +96,20 @@ def open_in_browser(file_location):
     """Attempt to open file located at file_location in the default web
     browser."""
 
-    # If just the name of the file was given, check if it's in the Current
-    # Working Directory.
-    if not os.path.isfile(file_location):
-        file_location = os.path.join(os.getcwd(), file_location)
+    #  For some reason webbrowser.get.().open() wants an absolute path:
+    file_location = os.path.abspath(file_location)
     if not os.path.isfile(file_location):
         raise IOError("\n\nFile not found.")
 
-    #  For some reason OSX requires this adjustment (tested on 10.10.4)
+    #  For some reason OSX requires this adjustment (tested on 10.10.4, 10.12.6)
     if sys.platform == "darwin":
         file_location = "file:///" + file_location
 
-    new = 2  # open in a new tab, if possible
-    webbrowser.get().open(file_location, new=new)
+    new = 0  # open in a new tab, if possible
+    try:
+        webbrowser.get().open(file_location, new=new)
+    except webbrowser.Error:
+        print("got an error")
 
 
 BugException = Exception("This code should never be reached.  You've found a "

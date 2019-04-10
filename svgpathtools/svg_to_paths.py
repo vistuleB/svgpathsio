@@ -84,13 +84,17 @@ def rect2pathd(rect):
     The rectangle will start at the (x,y) coordinate specified by the
     rectangle object and proceed counter-clockwise."""
     x0, y0 = float(rect.get('x', 0)), float(rect.get('y', 0))
-    w, h = float(rect.get('width', 0)), float(rect.get('height', 0))
+    try:
+        w, h = float(rect.get('width', 0)), float(rect.get('height', 0))
+    except ValueError:
+        raise
     x1, y1 = x0 + w, y0
     x2, y2 = x0 + w, y0 + h
     x3, y3 = x0, y0 + h
 
     d = ("M{} {} L {} {} L {} {} L {} {} Z"
          "".format(x0, y0, x1, y1, x2, y2, x3, y3))
+
     return d
 
 
