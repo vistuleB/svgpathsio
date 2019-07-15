@@ -882,6 +882,9 @@ Some strokes are protruding from the viewbox. (The reason why these offending st
     
 .. figure:: https://user-images.githubusercontent.com/19382247/54865337-117c2c00-4d9f-11e9-84fc-e1a11138bd47.png
 
+!!!!!! END OF NEW README, START OF OLD README !!!! STILL HAVE TO ADD DESCRIPTION OF .point(), Address(), .intersect(), .offset(), .stroke()
+===========================================================================
+
 Reading SVGSs
 -------------
 

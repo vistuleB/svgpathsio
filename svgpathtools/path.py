@@ -4,14 +4,17 @@ CubicBezier, and Arc."""
 
 # External dependencies
 from __future__ import division, absolute_import, print_function
+from itertools import chain
 
-from math import sqrt, cos, sin, degrees, radians, log, pi, tan, atan2
+from math import \
+    sqrt, cos, sin, degrees, radians, log, pi, tan, atan2, floor, ceil
 from cmath import exp, phase
 from warnings import warn
 from operator import itemgetter
 from collections import MutableSequence
 from numbers import Number
 import numpy as np
+
 try:
     from scipy.integrate import quad
     _quad_available = True
@@ -21,10 +24,10 @@ except ImportError:
 
 # Internal dependencies
 from .bezier import \
-    bezier_intersections, bezier_bounding_box, split_bezier, \
-    line_by_line_intersections, bezier_by_line_intersections, \
-    polynomial2bezier, bezier2polynomial, \
-    complex_linear_congruence
+    bezier_intersections, split_bezier, \
+    bezier_xbox, bezier_ybox, \
+    bezier_by_line_intersections, \
+    polynomial2bezier, bezier2polynomial
 
 from .misctools import \
     BugException
@@ -36,6 +39,8 @@ from .transform_parser import parse_transform
 
 
 # Default Parameters  ########################################################
+
+tau = 2 * pi  # courtesy M. Hartl
 
 # path segment .length() parameters for arc length computation
 LENGTH_MIN_DEPTH  = 5
@@ -65,7 +70,7 @@ _d_string_params = {
     'spacing_after_command': ' ',
     'spacing_before_command': ' ',
     'spacing_within_coordinate': ',',
-    'include_elidable_commands': False,
+    'include_elidable_commands': True,
     'include_elidable_line_commands': False,
     'include_elidable_first_line': True,
     'elided_command_replacement': ' ',
@@ -88,16 +93,8 @@ _d_string_must_be_nonempty_params.remove('spacing_before_new_subpath')
 _NotImplemented4ArcException = \
     Exception("This method has not yet been implemented for Arc objects.")
 
-_is_smooth_from_warning = \
-    "The name of this method is somewhat misleading (yet kept for " \
-    "compatibility with scripts created using svg.path 2.0).  This method " \
-    "is meant only for d-string creation and should NOT be used to check " \
-    "for kinks.  To check a segment for differentiability, use the " \
-    "joins_smoothly_with() method instead or the kinks() function (in " \
-    "smoothing.py).\nTo turn off this warning, set warning_on=False."
 
-
-# Miscellaneous  #############################################################
+# Convenience Constructors  ##################################################
 
 
 def points2lines(*points):
@@ -109,19 +106,42 @@ def points2lines(*points):
     return lines
 
 
+def points2polyline(*points, return_Subpath=False):
+    if return_Subpath:
+        return Subpath(*points2lines(*points))
+    else:
+        return Path(Subpath(*points2lines(*points)))
+
+
+def points2polygon(*points, return_Subpath=False):
+    if return_Subpath:
+        return Subpath(*points2lines(*points)).set_Z(forceful=True)
+    else:
+        return Path(Subpath(*points2lines(*points)).set_Z(forceful=True))
+
+
 def bbox2subpath(xmin, xmax, ymin, ymax):
-    """Converts a bounding box 4-tuple to a closed Subpath object."""
-    b = Line(xmin + 1j * ymin, xmax + 1j * ymin)
-    t = Line(xmin + 1j * ymax, xmax + 1j * ymax)
-    r = Line(xmax + 1j * ymin, xmax + 1j * ymax)
-    l = Line(xmin + 1j * ymin, xmin + 1j * ymax)
-    return Subpath(b, r, t.reversed(), l.reversed()).set_Z()
+    """
+    Returns a Subpath object containing a closed subpath that delimits
+    the bounding box.
+    """
+    return points2polygon(
+        xmin + 1j * ymin,
+        xmax + 1j * ymin,
+        xmax + 1j * ymax,
+        xmin + 1j * ymax,
+        return_Subpath=True
+    )
 
 
 def bbox2path(xmin, xmax, ymin, ymax):
-    """Returns a Path object containing a closed subpath that delimits
-    the bounding box."""
+    """
+    Returns a Path object containing a closed subpath that delimits
+    the bounding box.
+    """
     return Path(bbox2subpath(xmin, xmax, ymin, ymax))
+
+# Miscellaneous  #############################################################
 
 
 def is_smooth_join(coming_from, going_to, wrt_parameterization=False):
@@ -140,6 +160,9 @@ def is_smooth_join(coming_from, going_to, wrt_parameterization=False):
             0) == coming_from.unit_tangent(1)
 
 
+# Segment counting, iteration  ###############################################
+
+
 def segment_iterator_of(thing, back_to_front=False):
     if thing is None:
         return [].__iter__()
@@ -155,7 +178,23 @@ def segment_iterator_of(thing, back_to_front=False):
     if isinstance(thing, Path):
         return thing.segment_iterator(back_to_front=back_to_front)
 
-    assert False
+    raise ValueError("expecting Segment, Subpath, or Path")
+
+
+def subpath_iterator_of(thing):
+    if thing is None:
+        return [].__iter__()
+
+    if isinstance(thing, Segment):
+        raise NotImplementedError("Not sure we needed this feature...?")
+
+    if isinstance(thing, Subpath):
+        return [thing]
+
+    if isinstance(thing, Path):
+        return thing
+
+    raise ValueError("expecting Segment, Subpath, or Path")
 
 
 def segments_and_partial_addresses_in(thing):
@@ -184,9 +223,63 @@ def num_segments_in(thing):
         return len(thing)
 
     if isinstance(thing, Path):
-        return thing.num_segments()
+        return sum(len(s) for s in thing)
 
     raise ValueError("unknown thing in num_segments_in")
+
+
+# Could maybe have been in bezier.py, but is not:  ###########################
+
+
+def complex_linear_congruence(a, z, b, w):
+    """
+    Solves a + l * z = b + m * w for real l, m where a, z, b, w are complex.
+    """
+    Q = np.array([[real(z), -real(w)],
+                  [imag(z), -imag(w)]])
+    try:
+        l_and_m = np.linalg.inv(Q).dot(np.array([[real(b - a)], [imag(b - a)]]))
+
+    except np.linalg.LinAlgError:
+        raise ValueError
+
+    return l_and_m.item(0, 0), l_and_m.item(1, 0)
+
+
+def line_by_line_intersections(l1, l2):
+    """returns values a list that is either empty or else contains a single
+    pair (t1, t2) such that l1.point(t1) ~= l2.point(t2)"""
+    assert len(l1) == 2
+    assert len(l2) == 2
+    a = l1[0]
+    z = l1[1] - l1[0]
+    b = l2[0]
+    w = l2[1] - l2[0]
+    try:
+        t1, t2 = complex_linear_congruence(a, z, b, w)
+        if 0 <= t1 <= 1 and 0 <= t2 <= 1:
+            assert np.isclose(l1.point(t1), l2.point(t2))
+            return [(t1, t2)]
+        return []
+
+    except ValueError:
+        # try to certify an empty intersection
+        pairs = [(l1, l2)]
+        if abs(z) > 1e-8:
+            pairs.append((Line(0, 1),
+                          Line(b - a, b - a + (w / z))))
+        if abs(w) > 1e-8:
+            pairs.append((Line(a - b, a - b + (z / w)),
+                          Line(0, 1)))
+        for (q1, q2) in pairs:
+            xmax1, ymax1, xmin1, ymin1 = q1.bbox()
+            xmax2, ymax2, xmin2, ymin2 = q2.bbox()
+            if xmax1 < xmin2 or \
+               xmax2 < xmin1 or \
+               ymax1 < ymin2 or \
+               ymax2 < ymin1:
+                return []
+        raise
 
 
 # Conversion  #################################################################
@@ -245,17 +338,19 @@ def bez2poly(bez, numpy_ordering=True, return_poly1d=False):
 
 def transform(curve, tf):
     """Transforms the curve by the homogeneous transformation matrix tf"""
-    if isinstance(tf, str):
-        tf = parse_transform(tf)
-
     def to_point(p):
         return np.array([[p.real], [p.imag], [1.0]])
 
-    def to_vector(z):
-        return np.array([[z.real], [z.imag], [0.0]])
-
     def to_complex(v):
         return v.item(0) + 1j * v.item(1)
+
+    tf = parse_transform(tf)
+
+    if not isinstance(tf, np.ndarray):
+        raise ValueError("Expecting numpy.ndarray instance.")
+
+    if tf.shape != (3, 3):
+        raise ValueError("Expecting 3x3 numpy.ndarray.")
 
     if isinstance(curve, Path):
         return Path(*[transform(subpath, tf) for subpath in curve])
@@ -263,159 +358,112 @@ def transform(curve, tf):
     elif isinstance(curve, Subpath):
         return Subpath(*[transform(segment, tf) for segment in curve]).set_Z(following=curve)
 
-    elif isinstance(curve, Segment):
+    elif isinstance(curve, BezierSegment):
         return bpoints2bezier([to_complex(tf.dot(to_point(p)))
                                for p in curve.bpoints])
+
     elif isinstance(curve, Arc):
         new_start = to_complex(tf.dot(to_point(curve.start)))
         new_end = to_complex(tf.dot(to_point(curve.end)))
-        new_radius = to_complex(tf.dot(to_vector(curve.radius)))
-        return Arc(new_start, radius=new_radius, rotation=curve.rotation,
-                   large_arc=curve.large_arc, sweep=curve.sweep, end=new_end)
+
+        t = radians(curve.rotation)
+        rx = real(curve.radius)
+        ry = imag(curve.radius)
+
+        a = np.array([[cos(t)**2 / rx**2 + sin(t)**2 / ry**2,     cos(t) * sin(t) * (1 / rx**2 - 1 / ry**2)],
+                      [cos(t) * sin(t) * (1 / rx**2 - 1 / ry**2), sin(t)**2 / rx**2 + cos(t)**2 / ry**2]])
+        s_inverse = np.linalg.inv(tf[0:2, 0:2])
+        b = s_inverse.transpose().dot(a.dot(s_inverse))
+        d_squared, p = np.linalg.eigh(b)
+
+        new_t = np.arctan2(p[1, 0], p[0, 0])
+        new_rotation = degrees(new_t)
+        new_rx = sqrt(1 / d_squared[0])
+        new_ry = sqrt(1 / d_squared[1])
+
+        if b[0, 0] == b[1, 1] and \
+           b[1, 0] == b[0, 1] == 0:
+            # the eigenvector basis was arbitrary; rever to old orientation
+            # for 'least surprise'
+            new_rotation = curve.rotation
+
+        return Arc(new_start,
+                   radius=(new_rx + 1j * new_ry),
+                   rotation=new_rotation,
+                   large_arc=curve.large_arc,
+                   sweep=curve.sweep if np.linalg.det(a) > 0 else not curve.sweep,
+                   end=new_end)
+
     else:
         raise TypeError("Input `curve` should be a Path, Subpath, Line, "
                         "QuadraticBezier, CubicBezier, or Arc object.")
 
 
-def rotate(curve, degs, origin=None):
-    """Returns curve rotated by `degs` degrees (CCW) around the point `origin`
-    (a complex number).  By default origin is either `curve.point(0.5)`, or in
-    the case that curve is an Arc object, `origin` defaults to `curve.center`.
+def rotate(curve, degs, origin=0j):
     """
-    degs = degs % 360
-    if degs < 0:
-        degs += 360
-    assert 0 <= degs < 360
-
-    def compute_rot():
-        if degs == 0:
-            return 1
-
-        if degs == 90:
-            return 1j
-
-        if degs == 180:
-            return -1
-
-        if degs == 270:
-            return -1j
-
-        return exp(1j * radians(degs))
-
-    def transform(z):
-        return rot * (z - origin) + origin
-
-    if origin is None:
-        if isinstance(curve, Arc):
-            origin = curve.center
-        else:
-            origin = curve.point(0.5)
-
-    if isinstance(curve, Path):
-        return Path(*[
-            rotate(subpath, degs, origin=origin) for subpath in curve
-        ])
-
-    elif isinstance(curve, Subpath):
-        return Subpath(*[
-            rotate(seg, degs, origin=origin) for seg in curve
-        ]).set_Z(following=curve)
-
-    elif isinstance(curve, BezierSegment):
-        rot = compute_rot()
-        return bpoints2bezier(*[
-            transform(bpt) for bpt in curve.bpoints
-        ])
-
-    elif isinstance(curve, Arc):
-        rot = compute_rot()
-        new_start = transform(curve.start)
-        new_end = transform(curve.end)
-        new_rotation = curve.rotation + degs
-        return Arc(new_start, radius=curve.radius, rotation=new_rotation,
-                   large_arc=curve.large_arc, sweep=curve.sweep, end=new_end)
-
-    else:
-        raise TypeError("Input `curve` should be a Path, Line, "
-                        "QuadraticBezier, CubicBezier, or Arc object.")
-
-
-def translate(curve, z0):
-    """Shifts the curve by the complex quantity z such that
-    translate(curve, z0).point(t) = curve.point(t) + z0"""
-    if isinstance(curve, Path):
-        return Path(*[
-            translate(subpath, z0) for subpath in curve
-        ])
-
-    elif isinstance(curve, Subpath):
-        return Subpath(*[
-            translate(seg, z0) for seg in curve
-        ]).set_Z(following=curve)
-
-    elif isinstance(curve, BezierSegment):
-        return bpoints2bezier(*[
-            bpt + z0 for bpt in curve.bpoints
-        ])
-
-    elif isinstance(curve, Arc):
-        new_start = curve.start + z0
-        new_end = curve.end + z0
-        return Arc(new_start, radius=curve.radius, rotation=curve.rotation,
-                   large_arc=curve.large_arc, sweep=curve.sweep, end=new_end)
-
-    else:
-        raise TypeError("Input `curve` should be a Path, Line, "
-                        "QuadraticBezier, CubicBezier, or Arc object.")
+    Returns curve rotated by `degs` degrees (CCW) around the point `origin`
+    (a complex number), which defaults to 0.
+    """
+    return \
+        transform(
+            curve,
+            ['translate', origin, 'rotate', degs, 'translate', -origin]
+        )
 
 
 def scale(curve, x, y=None, origin=0j):
-    """Scales all coordinates in the curve by x in the x direction and by y
-    direction; y defaults to x if not supplied"""
-    def scale_pt(q, o=0j):
-        return \
-            (o.real + (q.real - o.real) * x) + \
-            (o.imag + (q.imag - o.imag) * y) * 1j
+    """
+    Scales all coordinates in the curve by x in the x direction and by y
+    direction; y defaults to x if not supplied.
+    """
+    return \
+        transform(
+            curve,
+            ['translate', origin, 'scale', x, y, 'translate', -origin]
+        )
 
-    if y is None:
-        y = x
 
-    if curve.is_or_has_arc() and y != x:
-        raise NotImplementedError
+def translate(curve, x, y=0):
+    """
+    Shifts the curve by the complex quantity z = x + 1 j * y, such that
+    translate(curve, x, y).point(t) = curve.point(t) + z. Note that x can be complex.
+    Therefore, translate(curve, 10, 10) and translate(curve, 10 + 10j) are equivalent.
+    """
 
-    assert x.imag == y.imag == 0
-    assert x != 0 and y != 0
+    # Note: we could implement this via transform like 'scale' and 'rotate'
+    # above, but since translations are common, and since general Arc transforms are
+    # slow-ish, we do things from scratch
+
+    z = x + 1j * y
 
     if isinstance(curve, Path):
-        assert all(isinstance(subpath, Subpath) for subpath in curve)
-        to_return = Path(*[
-            scale(subpath, x, y, origin) for subpath in curve
+        return Path(*[
+            translate(subpath, z) for subpath in curve
         ])
 
     elif isinstance(curve, Subpath):
-        assert all(isinstance(seg, Segment) for seg in curve)
-        to_return = Subpath(*[
-            scale(seg, x, y, origin) for seg in curve
+        return Subpath(*[
+            translate(seg, z) for seg in curve
         ]).set_Z(following=curve)
 
     elif isinstance(curve, BezierSegment):
-        to_return = bpoints2bezier(*[
-            scale_pt(bpt, origin) for bpt in curve.bpoints
+        return bpoints2bezier(*[
+            bpt + z for bpt in curve.bpoints
         ])
 
     elif isinstance(curve, Arc):
-        new_start = scale_pt(curve.start, origin)
-        new_end = scale_pt(curve.end, origin)
-        new_radius = scale_pt(curve.radius)
-        to_return = Arc(start=new_start, radius=new_radius,
-                        rotation=curve.rotation, large_arc=curve.large_arc,
-                        sweep=curve.sweep, end=new_end)
+        new_start = curve.start + z
+        new_end = curve.end + z
+        return Arc(start=new_start,
+                   radius=curve.radius,
+                   rotation=curve.rotation,
+                   large_arc=curve.large_arc,
+                   sweep=curve.sweep,
+                   end=new_end)
 
     else:
         raise TypeError("Input `curve` should be a Path, Line, "
                         "QuadraticBezier, CubicBezier, or Arc object.")
-
-    return to_return
 
 
 def bezier_unit_tangent(seg, t):
@@ -490,8 +538,8 @@ def bezier_radialrange(seg, origin, return_all_global_extrema=False):
     By default, this will only return one. Set return_all_global_extrema=True
     to return all such global extrema."""
 
-    def _radius(tau):
-        return abs(seg.point(tau) - origin)
+    def _radius(t):
+        return abs(seg.point(t) - origin)
 
     shifted_seg_poly = seg.poly() - origin
     r_squared = real(shifted_seg_poly)**2 + imag(shifted_seg_poly)**2
@@ -623,21 +671,104 @@ def inv_arclength(curve, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
                         "CubicBezier, Arc, Subpath, or Path object.")
 
 
-def multisplit_of(curve, us):
-    """takes a possibly empty list of values u1, ..., un such that
-    0 < u1 < ... < un < 1 and returns a list of objects of the same type
-    as curve whose union is curve and whose endpoints are curve.point(0),
-    curve.point(u1), ..., curve.point(un), curve.point(1)
+def fancy_multisplit(subpath, addresses):
+    def address_with_T(T):
+        for a in addresses:
+            if a.T == T:
+                return a
+        assert False
 
-    Same return value as 'curve.multisplit(ts)'
-    """
-    assert all(x < y for x, y in zip(us, us[1:]))
-    assert len(us) == 0 or (us[0] > 0 and us[-1] < 1)
-    us.insert(0, 0)
-    us.append(1)
+    assert isinstance(subpath, Subpath)
+    assert len(addresses) > 0
+
+    Ts = list({a.T for a in addresses})
+    Ts.sort()
+    assert len(Ts) == len(addresses)
+    assert all(0 <= T <= 1 for T in Ts)
+
     pieces = []
-    for u0, u1 in zip(us, us[1:]):
-        pieces.append(curve.cropped(u0, u1))
+    for T1, T2 in zip(Ts, chain(Ts[1:], [Ts[0]] if (Ts[-1] < 1 or Ts[0] > 0) else [])):
+        assert T1 < T2 or (
+            T2 == Ts[0] and
+            T1 == Ts[-1] and
+            T1 > T2 and
+            subpath.Z
+        )
+        pieces.append((
+            subpath.cropped(T1, T2),
+            (address_with_T(T1), address_with_T(T2))
+        ))
+
+    assert len(pieces) == len(addresses)
+    assert all(isinstance(p, Subpath) for p, _ in pieces)
+    assert all(not p.Z for p, _ in pieces)
+    assert all(a1a2 != b1b2 or p == q for p, a1a2 in pieces for q, b1b2 in pieces)
+
+    assert np.isclose(
+        sum(q[0].length() for q in pieces),
+        subpath.length()
+    )
+
+    return pieces
+
+
+def multisplit(curve, addresses_or_params):
+    addresses = [param2address(curve, a) for a in addresses_or_params]
+
+    assert all(
+        (
+            address2param(curve, a1) < address2param(curve, a2) or
+            (
+                isinstance(curve, Path) and
+                address2param(curve, a1) == address2param(curve, a2) and
+                a1.subpath_index < a2.subpath_index
+            )
+        ) for a1, a2 in zip(
+            addresses, addresses[1:]
+        )
+    )
+
+    inserted_0 = False
+    if all(address2param(curve, a) > 0 for a in addresses):
+        addresses.insert(0, param2address(curve, 0))
+        inserted_0 = True
+
+    inserted_1 = False
+    if all(address2param(curve, a) < 1 for a in addresses):
+        addresses.append(param2address(curve, 1))
+        inserted_1 = True
+
+    assert 0 in [address2param(curve, a) for a in addresses]
+    assert 1 in [address2param(curve, a) for a in addresses]
+
+    pieces = []
+
+    if isinstance(curve, Segment):
+        for a1, a2 in zip(addresses, addresses[1:]):
+            pieces.append(curve.cropped(a1, a2))
+
+    elif isinstance(curve, Subpath):
+        for a1, a2 in zip(addresses, addresses[1:]):
+            pieces.append(curve.cropped(a1, a2))
+
+        if curve.Z and not inserted_0 and not inserted_1:
+            if len(pieces) == 1:
+                assert pieces[0] == curve
+                assert pieces[0].Z is False
+                pieces[0].set_Z()
+
+            else:
+                assert len(pieces) > 1
+                num_segments = sum(x.num_segments() for x in pieces)
+                last_piece = pieces.pop()
+                pieces[0].splice(0, 0, last_piece)
+                assert num_segments == sum(x.num_segments() for x in pieces)
+
+    elif isinstance(curve, Path):
+        for index, subpath in enumerate(curve):
+            filtered = [a for a in addresses if a.subpath_index == index]
+            pieces += multisplit(subpath, filtered)
+
     return pieces
 
 
@@ -666,6 +797,264 @@ def crop_bezier(seg, t0, t1):
     assert type(cropped_seg) == type(seg)
 
     return cropped_seg if not swap else cropped_seg.reversed()
+
+
+# For external convenience geometric #####################################
+
+
+def heuristic_has_point_outside(p, enclosure, tol=1e-8):
+    xmin, xmax, ymin, ymax = p.bbox()
+    Xmin, Xmax, Ymin, Ymax = enclosure.bbox()
+    if xmax > Xmax + tol or \
+       xmin < Xmin - tol or \
+       ymax > Ymax + tol or \
+       ymin < Ymin - tol:
+        return True
+
+    for t in np.arange(0.05, 0.96, 0.05):  # avoid endpoints as too touchy
+        if not enclosure.even_odd_encloses(p.point(t)):
+            return True
+
+    return False
+
+
+def crop(p1, p2, crop_to_inside=True):
+    intersections = p1.intersect(p2)
+    p1Ws = list({a1.W for (a1, a2) in intersections})
+    p1Ws.sort()
+    pieces = p1.multisplit(p1Ws)
+    return Path(*[x for x in pieces if heuristic_has_point_outside(x, p2) != crop_to_inside])
+
+
+def intersect_subpaths(s1, s2):
+    assert isinstance(s1, Subpath)
+    assert isinstance(s2, Subpath)
+    assert s1.Z
+    assert s2.Z
+
+    def find_matching_a2(a1):
+        assert isinstance(a1, Address)
+        for (b1, b2) in intersections:
+            if b1 == a1:
+                return b2
+        print("a1:", a1)
+        print("intersections:", intersections)
+        assert False
+
+    def find_matching_a1(a2):
+        assert isinstance(a2, Address)
+        for (b1, b2) in intersections:
+            if b2 == a2:
+                return b1
+        assert False
+
+    intersections = s1.intersect(s2, normalize=True)
+    for index, (a1, a2) in enumerate(intersections):
+        for (b1, b2) in intersections[index + 1:]:
+            assert a1.T != b1.T
+            assert a2.T != b2.T
+
+    if len(intersections) <= 1:
+        if not heuristic_has_point_outside(s1, s2):
+            return Path(s1.cloned())
+        if not heuristic_has_point_outside(s2, s1):
+            return Path(s2.cloned())
+        return Path()
+
+    pieces_and_endpoints_1 = fancy_multisplit(s1, [a1 for (a1, a2) in intersections])
+    pieces_and_endpoints_2 = fancy_multisplit(s2, [a2 for (a1, a2) in intersections])
+
+    pieces_and_endpoints_1 = [
+        (p, (s, e)) for p, (s, e)
+        in pieces_and_endpoints_1 if not heuristic_has_point_outside(p, s2, tol=1e-6)
+    ]
+
+    pieces_and_endpoints_2 = [
+        (p, (s, e)) for p, (s, e)
+        in pieces_and_endpoints_2 if not heuristic_has_point_outside(p, s1, tol=1e-6)
+    ]
+
+    answer = Path()
+
+    total_pieces_used_so_far = []
+
+    while True:
+        pieces_and_endpoints_1 = [
+            (p, (s, e)) for p, (s, e) in pieces_and_endpoints_1 if p not in total_pieces_used_so_far
+        ]
+        pieces_and_endpoints_2 = [
+            (p, (s, e)) for p, (s, e) in pieces_and_endpoints_2 if p not in total_pieces_used_so_far
+        ]
+
+        if len(pieces_and_endpoints_1) > 0:
+            piece = pieces_and_endpoints_1[0][0]
+            piece_subpath_owner = s1
+            piece_index = 0
+            piece_forward = True
+
+        elif len(pieces_and_endpoints_2) > 0:
+            piece = pieces_and_endpoints_2[0][0]
+            piece_subpath_owner = s2
+            piece_index = 0
+            piece_forward = False  # what does it matter?
+
+        else:
+            break
+
+        pieces_so_far = [(
+            piece,
+            piece_forward,
+            piece_subpath_owner,
+            piece_index
+        )]
+
+        assert piece not in total_pieces_used_so_far
+        total_pieces_used_so_far.append(piece)
+
+        while True:
+            if piece_subpath_owner is s1:
+                a1 = pieces_and_endpoints_1[
+                    piece_index
+                ][
+                    1
+                ][
+                    1 if piece_forward else 0
+                ]
+                a2 = find_matching_a2(a1)
+
+            elif piece_subpath_owner is s2:
+                a2 = pieces_and_endpoints_2[
+                    piece_index
+                ][
+                    1
+                ][
+                    1 if piece_forward else 0
+                ]
+                a1 = find_matching_a1(a2)
+
+            else:
+                assert False
+
+            assert (a1, a2) in intersections
+
+            candidates = []
+
+            # enumerate all p1 candidates
+            for index, (p1, (start1, end1)) in enumerate(pieces_and_endpoints_1):
+                assert isinstance(p1, Subpath)
+                assert isinstance(start1, Address)
+                assert isinstance(end1, Address)
+
+                if start1 != a1 and end1 != a1:
+                    continue
+
+                # if any(q[0] == p1 for q in pieces_so_far):
+                #     continue
+                if p1 in total_pieces_used_so_far:
+                    continue
+
+                if heuristic_has_point_outside(p1, s2):
+                    continue
+
+                assert p1 != piece
+
+                if start1 == a1:
+                    candidates.append((
+                        p1,
+                        True,
+                        s1,
+                        index
+                    ))
+
+                if end1 == a1:
+                    candidates.append((
+                        p1,
+                        False,
+                        s1,
+                        index
+                    ))
+
+            # enumerate all p2 candidates
+            for index, (p2, (start2, end2)) in enumerate(pieces_and_endpoints_2):
+                assert isinstance(p2, Subpath)
+                assert isinstance(start2, Address)
+                assert isinstance(end2, Address)
+
+                if any(q[0] == p2 for q in pieces_so_far):
+                    continue
+
+                # if any(q[0] == p2 for q in pieces_so_far):
+                #     continue
+                if p2 in total_pieces_used_so_far:
+                    continue
+
+                if heuristic_has_point_outside(p2, s1):
+                    continue
+
+                assert p2 != piece
+
+                if start2 == a2:
+                    candidates.append((
+                        p2,
+                        True,
+                        s2,
+                        index
+                    ))
+
+                if end2 == a2:
+                    candidates.append((
+                        p2,
+                        False,
+                        s2,
+                        index
+                    ))
+
+            if len(candidates) == 0:
+                break
+
+            # let's be primitive:
+            pieces_so_far.append(candidates[0])
+
+            (
+                piece,
+                piece_forward,
+                piece_subpath_owner,
+                piece_index
+            ) = pieces_so_far[-1]
+
+            assert piece not in total_pieces_used_so_far
+            total_pieces_used_so_far.append(piece)
+
+        oriented_pieces = [
+            piece if forward else piece.reversed()
+            for piece, forward, owner, index in pieces_so_far
+        ]
+
+        assert len(oriented_pieces) > 0
+
+        if not all(np.isclose(p.end, q.start) for p, q in zip(oriented_pieces,
+                                                              oriented_pieces[1:])):
+            raise BugException("You thought it would be that easy? Whu-ah-ah-ah-ah-ah!!!! (1)")
+
+        if not np.isclose(
+            oriented_pieces[0].start,
+            oriented_pieces[-1].end
+        ):
+            raise ValueError("You thought it would be that easy? Whu-ah-ah-ah-ah-ah!!!! (2)")
+
+        answer.append(Subpath(*oriented_pieces).set_Z())
+
+    return answer
+
+
+def intersect_paths(p1, p2):
+    answer = Path()
+
+    for s1 in subpath_iterator_of(p1):
+        for s2 in subpath_iterator_of(p2):
+            answer.extend(intersect_subpaths(s1, s2), even_if_empty=False)
+
+    return answer
 
 
 # Offset-related functions ###############################################
@@ -862,8 +1251,6 @@ def join_offset_segments_into_subpath(skeleton, offsets, putative_amount,
                 putative_amount,
                 join=join, miter_limit=miter_limit
             )
-            # if t1 <= 0 or t2 >= 1:
-                # print("u got t1", t1, "t2", t2)
 
             assert t1 >= 0 and t2 <= 1
             o1 = off1 if t1 == 1 else off1.cropped(0, t1)
@@ -1125,6 +1512,7 @@ class Address(object):
             raise ValueError("Address compared to non-Address")
 
         if (self.W is None) != (other.W is None):
+            print("self.W, other.W:", self.W, other.W)
             raise ValueError
         if self.W is not None and self.W > other.W:
             return True
@@ -1237,7 +1625,7 @@ class Address(object):
         assert name in ADDRESS_FIELD_NAMES
         exec("self._" + name + " = value")
 
-    def clone_with(self, **kw):
+    def tweaked(self, **kw):
         assert all(key in ADDRESS_FIELD_NAMES for key in kw)
         a = Address(**kw)
         for name in ADDRESS_FIELD_NAMES:
@@ -1336,7 +1724,17 @@ class ValueAddressPair(object):
 def address2param(owner, param_or_address):
     if isinstance(param_or_address, Number):
         return param_or_address
-    return owner.self_level_parameter_of(param_or_address)
+
+    elif isinstance(owner, Segment):
+        return param_or_address.t
+
+    elif isinstance(owner, Subpath):
+        return param_or_address.T
+
+    elif isinstance(owner, Path):
+        return param_or_address.W
+
+    raise ValueError("Unknown type of owner in address2param.")
 
 
 def param2address(owner, param_or_address):
@@ -1389,180 +1787,361 @@ def address_pair_from_t1t2_tuple(p):
     return (Address(t=p[0]), Address(t=p[1]))
 
 
+# __repr__ craziness... all the options & their processing ###################
+
+
+_repr_option_names = {
+    'use_keywords',
+    'use_parens',
+    'use_commas',
+    'use_oneline',
+    'use_fixed_indent',
+    'constructor_ready',
+    'pad_operators',
+    'indent_size'
+}
+
+
+def _load_repr_options_for(shortname):
+    to_return = {
+        'use_keywords': False,
+        'use_parens': False,
+        'use_commas': False,
+        'use_oneline': False,
+        'use_fixed_indent': True,
+        'constructor_ready': False,
+        'pad_operators': False,
+        'indent_size': 4
+    }
+
+    assert all(k in _repr_option_names for k in to_return)
+    assert all(k in to_return for k in _repr_option_names)
+
+    if shortname in ['path', 'subpath']:
+        return to_return
+
+    to_return['use_oneline'] = True
+
+    return to_return
+
+
+def _parse_repr_options(shortname, options):
+    def print_lists(msg):
+        return
+        print(msg + ":")
+        for l in lists:
+            print("  ", l)
+
+    shortnames = {'path', 'subpath', 'line', 'quadratic', 'cubic', 'arc'}
+    qualifiers = shortnames.union({'segment'})
+
+    assert shortname in shortnames
+
+    is_segment = shortname in ['line', 'quadratic', 'cubic', 'arc']
+
+    if isinstance(options, dict):
+        if any(o not in _repr_option_names for o in options):
+            raise ValueError("bad repr_option")
+        return options
+
+    if not isinstance(options, str):
+        raise ValueError("expecting options in form of string or dict")
+
+    relevant_qualifiers = {shortname}.union(
+        {'segment'} if is_segment else set([])
+    )
+    extraneous_qualifiers = qualifiers.difference(relevant_qualifiers)
+
+    # normalizing...
+    options = options.replace('segments', 'segment')
+    options = options.replace(',', ' ')
+
+    # turn options into lists
+    options_list = [o for o in options.split() if o != '']
+    lists = [o.split('.') for o in options_list]
+    print_lists("original lists")
+
+    # remove options targeting other objects
+    lists = [o for o in lists if shortname in o or
+             all(e not in o for e in extraneous_qualifiers)]
+    print_lists("lists after keeping only {}-relevant options"
+                .format(shortname))
+
+    # removing extraneous qualifiers:
+    lists = [[e for e in o if e not in extraneous_qualifiers] for o in lists]
+    print_lists("lists after purging extraneous qualifiers")
+
+    # create list of used keys, and normalize missing values to 'true':
+    keys = []
+    for o in lists:
+        if o[0] in _repr_option_names:
+            val_index = 1
+
+        else:
+            if o[0] not in relevant_qualifiers or \
+               o[1] not in _repr_option_names:
+                raise ValueError("format error (1) for _repr_ option:", o)
+            val_index = 2
+
+        if not val_index <= len(o) <= val_index + 1:
+            raise ValueError("format error (2) for _repr_ option:", o)
+
+        if len(o) == val_index + 1 and \
+           o[val_index] not in ['true', 'false'] and \
+           o[val_index - 1] != 'indent_size':
+            raise ValueError("format error (3) for _repr_ option:", o)
+
+        if len(o) < val_index + 1 and \
+           o[val_index - 1] != 'indent_size':
+            o.append('true')
+
+        if len(o) < val_index + 1:
+            assert o[val_index] == 'indent_size'
+            raise ValueError("format error (4) for _repr_ option:", o)
+
+        assert len(o) == val_index + 1  # everybody has a value
+
+        keys.append(o[:val_index])
+
+    print_lists(f"lists after adding default 'true' fields")
+
+    # remove keys whose specializations already exist
+    indices_to_delete = []
+    assert len(keys) == len(lists)
+    for index, key in enumerate(keys):
+        if len(key) == 1:
+            assert key[0] in _repr_option_names
+            new_key = [shortname, key[0]]
+
+        elif (len(key) == 2 and
+              key[0] == 'segment'):
+            assert is_segment
+            assert key[1] in _repr_option_names
+            new_key = [shortname, key[1]]
+
+        else:
+            continue
+
+        if new_key in keys:
+            indices_to_delete.append(index)
+
+    last_deleted = len(lists)
+    for index in reversed(indices_to_delete):
+        assert index < last_deleted
+        del lists[index]
+        last_deleted = index
+
+    print_lists(f"lists after purging superceded keys")
+
+    # now we can pop shortname or 'segment' from lists
+    for o in lists:
+        if o[0] == shortname:
+            del o[0]
+
+        elif o[0] == 'segment':
+            assert is_segment
+            del o[0]
+
+        assert len(o) == 2
+        assert o[0] in _repr_option_names
+
+    print_lists(f"lists after popping shortname, 'segment'")
+
+    # parse the second (last) coordinate of each list
+    for o in lists:
+        assert o[0] in _repr_option_names
+
+        if o[0] == 'indent_size':
+            try:
+                val = int(o.pop())
+                if val < 0:
+                    raise ValueError("")
+                o.append(val)
+            except ValueError:
+                raise ValueError("couldn't convert indent_size to int")
+
+        else:
+            val = o.pop()
+            if val == 'true':
+                o.append(True)
+
+            elif val == 'false':
+                o.append(False)
+
+            else:
+                assert False
+
+        assert len(o) == 2
+
+    # check against duplicates
+    for index1, o1 in enumerate(lists):
+        for index2, o2 in enumerate(lists):
+            if index1 == index2:
+                continue
+            if o1[0] == o2[0]:
+                raise ValueError("redundant repr_option")
+
+    parsed_options = {}
+    for o in lists:
+        assert len(o) == 2
+        assert o[0] not in parsed_options
+        assert o[0] in _repr_option_names
+        assert \
+            isinstance(o[1], bool) or \
+            (isinstance(o[1], int) and o[0] == 'indent_size')
+        parsed_options[o[0]] = o[1]
+
+    if 'constructor_ready' in parsed_options and \
+       'pad_operators' not in parsed_options and \
+       parsed_options['constructor_ready'] is True:
+        parsed_options['pad_operators'] = True
+
+    return parsed_options
+
+
+def _check_repr_options(options):
+    for key, value in options.items():
+        if key not in _repr_option_names:
+            raise ValueError("unknown key:", key)
+        if key == 'indent_size':
+            if not isinstance(value, int):
+                raise ValueError("bad indent_size")
+        else:
+            if not isinstance(value, bool):
+                raise ValueError("expecting bool option for key", key)
+
+
 # Curve and its descendants ##################################################
 
 
 class Curve(object):
+    @classmethod
+    def shortname(cls):
+        if cls is Path:
+            return 'path'
+        elif cls is Subpath:
+            return 'subpath'
+        elif cls is Line:
+            return 'line'
+        elif cls is QuadraticBezier:
+            return 'quadratic'
+        elif cls is CubicBezier:
+            return 'cubic'
+        elif cls is Arc:
+            return 'arc'
+        raise ValueError("unknown class in shortname")
+
     def _repr_options_init(self):
-        self._repr_use_keywords = False
-        self._repr_use_parens = False
-        self._repr_use_commas = True
-        self._repr_use_oneline = False
-        self._repr_use_fixed_indent = False
-        self._repr_closing_paren_own_line = True
-        self._repr_constructor_ready = False
-        self._repr_pad_operators = False
-        self._repr_indent_size = 4
+        self._own_repr_options = self._class_repr_options.copy()
 
-    def parse_temp_repr_options(self, options_string):
-        def print_lists(msg):
-            return
-            print(msg)
-            for l in lists:
-                print("  ", l)
+    @classmethod
+    def update_class_repr_options(cls, options):
+        if cls is BezierSegment:
+            Line.update_class_repr_options(options)
+            QuadraticBezier.update_class_repr_options(options)
+            CubicBezier.update_class_repr_options(options)
 
-        option_names = {
-            'use_keywords',
-            'use_parens',
-            'use_commas',
-            'use_oneline',
-            'use_fixed_indent',
-            'closing_paren_own_line',
-            'constructor_ready',
-            'pad_operators',
-            'indent_size'
-        }
+        elif cls is Segment:
+            BezierSegment.update_class_repr_options(options)
+            Arc.update_class_repr_options(options)
 
-        boolean_option_names = {s for s in option_names if s != 'indent_size'}
+        else:
+            if cls not in [Path, Subpath, Line, Arc,
+                           QuadraticBezier, CubicBezier]:
+                raise ValueError("unknown class")
+            options = _parse_repr_options(cls.shortname(), options)
+            _check_repr_options(options)
+            cls._class_repr_options.update(options)
 
-        # our names vs other ppls names
-        all_names = {'path', 'subpath', 'line', 'quadratic',
-                     'cubic', 'arc', 'segment'}
-        our_name = self.shortname()
-        other_names = {p for p in all_names if p != our_name}
-        assert len(other_names) == len(all_names) - 1
+    def update_repr_options(self, options):
+        options = _parse_repr_options(options)
+        _check_repr_options(options)
+        self._own_repr_options.update(options)
 
-        # constructing original list of options:
-        assert isinstance(options_string, str)
-        options_string = options_string.replace('segments', 'segment')
-        if isinstance(self, Segment):
-            options_string = options_string.replace('segment', our_name)
-        options_string = options_string.replace(',', ' ')
-        lists = [o.split('.') for o in options_string.split() if o != '']
-        print_lists("original lists:")
+    def __repr__(self, tmp_options={}, forced_options={}):
+        def repr_num(z):
+            string = str(z)
+            if not options['use_parens']:
+                string = string.strip('()')
+            if options['pad_operators']:
+                string = ' + '.join(string.split('+'))
+                if string.startswith('-'):
+                    string = '-' + ' - '.join(string.split('-')[1:])
+                else:
+                    string = ' - '.join(string.split('-'))
+            return string
 
-        assert all(len(l) > 0 and all(len(q) > 0 for q in l) for l in lists)
+        options = self._own_repr_options.copy()
+        local_tmp_options = _parse_repr_options(self.shortname(), tmp_options)
+        options.update(local_tmp_options)
+        options.update(forced_options)
 
-        # removing extraneous options:
-        lists = [o for o in lists if our_name in o or not
-                 any(e in o for e in other_names)]
-        print_lists(f"lists after keeping only {our_name}-relevant options:")
+        if options['constructor_ready']:
+            options['use_commas'] = True
 
-        # removing extraneous labels:
-        lists = [[e for e in o if e not in other_names] for o in lists]
-        print_lists(f"lists after purging extraneous labels:")
-
-        acceptable_string_values = {s for s in option_names}
-        acceptable_string_values.add(our_name)
-        acceptable_string_values.add('false')
-        acceptable_string_values.add('true')
-
-        assert all(len(l) > 0 for l in lists)
-        assert all(our_name == o[0] or o[0] in option_names for o in lists)
-        assert all(l[-1] in acceptable_string_values or
-                   l[-1].isdigit() for l in lists)
-
-        # removing less-specific options
-        lists = [o for o in lists if our_name == o[0] or not
-                 any(our_name == o2[0] and o[0] == o2[1] for o2 in lists)]
-        print_lists(f"lists after '{our_name}' specificity purge:")
-
-        # removing the our_name from all lists
-        lists = [[e for e in o if e != our_name] for o in lists]
-        print_lists(f"lists after removing our_name:")
-
-        assert all(our_name not in o and o[0] in option_names for o in lists)
-
-        for option_name in option_names:
-            exec("self._temp_repr_" + option_name +
-                 " = self._repr_" + option_name)
-
-        for l in lists:
-            option_name = l[0]
-            if option_name in boolean_option_names:
-                exec("self._temp_repr_" + option_name + " = True")
-                if 'false' in l:
-                    exec("self._temp_repr_" + option_name + " = False")
-            else:
-                assert option_name == 'indent_size'
-                for q in l:
-                    if q.isdigit():
-                        self._temp_repr_indent_size = int(q)
-
-        if self._temp_repr_constructor_ready:
-            self._temp_repr_indent_size = 4
-            self._temp_repr_use_commas = True
-
-    def __repr_num(self, z):
-        string = str(z)
-        if not self._temp_repr_use_parens:
-            string = string.strip('()')
-        if self._temp_repr_pad_operators:
-            string = ' + '.join(string.split('+'))
-            if string.startswith('-'):
-                string = '-' + ' - '.join(string.split('-')[1:])
-            else:
-                string = ' - '.join(string.split('-'))
-        return string
-
-    def __repr__(self, temp_options=''):
-        self.parse_temp_repr_options(temp_options)
+        if options['use_oneline']:
+            options['use_fixed_indent'] = False
 
         # first join
         first_join = ''
-        if self._temp_repr_use_fixed_indent and \
-           not self._temp_repr_use_oneline:
-            first_join = '\n' + ' ' * self._temp_repr_indent_size
+        if options['use_fixed_indent']:
+            first_join = '\n'  # I guess we'll leave this here even for paths; not much harm?
+            first_join += ' ' * options['indent_size']
 
         # comma
-        comma = ','
-        if not self._temp_repr_use_commas:
-            comma = ''
+        comma = ',' if options['use_commas'] else ''
 
         # join
         join = comma + ' '
-        if not self._temp_repr_use_oneline:
-            if self._temp_repr_use_fixed_indent:
-                num_spaces = self._temp_repr_indent_size
+        if not options['use_oneline']:
+            if options['use_fixed_indent']:
+                num_spaces = options['indent_size']
             else:
                 num_spaces = len(self.__class__.__name__) + 1
             join = comma + '\n' + ' ' * num_spaces
 
         # newline_replacement
-        newline_replacement = '\n'
-        if not self._temp_repr_use_oneline:
-            newline_replacement = '\n' + ' ' * num_spaces
+        newline_replacement = \
+            ' ' if options['use_oneline'] \
+            else '\n' + ' ' * num_spaces
 
         # last join
         last_join = ''
-        if not self._temp_repr_use_oneline and \
-           self._temp_repr_use_fixed_indent and \
-           self._temp_repr_closing_paren_own_line:
+        if options['use_fixed_indent']:
             last_join = '\n'
 
         # ztring
         zstring = ''
         if isinstance(self, Subpath) and self._Z:
-            zstring = '.Z'
-            if self._temp_repr_constructor_ready:
-                zstring = '.set_Z()'
+            zstring = \
+                '.set_Z()' if options['constructor_ready'] \
+                else '.Z'
 
         # and here we go...
         string = self.__class__.__name__ + f'({first_join}'
 
         if isinstance(self, Segment):
             for index, key in enumerate(self._field_names, 1):
-                if self._temp_repr_use_keywords:
+                if options['use_keywords']:
                     string += key + '='
-                string += self.__repr_num(eval("self._" + key))
+                string += repr_num(eval("self._" + key))
                 if index < len(self._field_names):
                     string += join
+
         else:
             assert isinstance(self, Subpath) or isinstance(self, Path)
-            if self._temp_repr_use_oneline:
-                temp_options += ' use_oneline'
+            # options that should be inherited (are there more?):
+            forced_options = {}
+
+            if options['use_oneline']:
+                forced_options.update({'use_oneline': True})
+
+            if options['constructor_ready']:
+                forced_options.update({'constructor_ready': True})
+
             for index, thing in enumerate(self, 1):
-                s = thing.__repr__(temp_options=temp_options)
+                s = thing.__repr__(tmp_options=tmp_options,
+                                   forced_options=forced_options)
                 s = s.replace('\n', newline_replacement)
                 string += s
                 if index < len(self):
@@ -1572,7 +2151,7 @@ class Curve(object):
 
         return string
 
-    def rotated(self, degs, origin=None):
+    def rotated(self, degs, origin=0j):
         """Returns a copy of self rotated by `degs` degrees (CCW) around the
         point `origin` (a complex number).  By default `origin` is either
         `self.point(0.5)`, or in the case that self is an Arc object, `origin`
@@ -1644,10 +2223,10 @@ class Curve(object):
             seg_min, seg_max = segment.radialrange(origin)
             if seg_min.value < global_min.value:
                 global_min.value = seg_min.value
-                global_min.address = a.clone_with(t=seg_min.address.t)
+                global_min.address = a.tweaked(t=seg_min.address.t)
             if seg_max.value > global_max.value:
                 global_max.value = seg_max.value
-                global_max.address = a.clone_with(t=seg_max.address.t)
+                global_max.address = a.tweaked(t=seg_max.address.t)
 
         if num_segments_in(self) > 0:
             assert isinstance(global_min.address, Address)
@@ -1658,36 +2237,81 @@ class Curve(object):
         return global_min, global_max
 
     def multisplit(self, time_values):
-        """takes a possibly empty list of values u1, ..., un such that
-        0 < u1 < ... < un < 1 and returns a list of objects of type self
-        whose union is self and whose endpoints are self.point(0),
-        self.point(u1), ..., self.point(un), self.point(1)"""
-        return multisplit_of(self, time_values)
+        """
+        Takes a possibly empty list of values u1, ..., un such that
+        0 <= u1 < ... < un <= 1 and returns a list of objects of the same type
+        as curve whose union is curve and whose endpoints are curve.point(0),
+        curve.point(s1), ..., curve.point(k), curve.point(1) where 0 < s1 < ...
+        < k < 1 and
+
+        {0, s1, ..., sk, 1} = {0, u1, ..., un, 1 }
+
+        Same return value as 'curve.multisplit(us)'.
+        """
+        assert isinstance(time_values, list)
+        return multisplit(self, time_values)
+
+    def xbox(self):
+        """
+        Returns xmin, xmax: smallest and lowest x-coordinates of curve.
+        Overwritten by BezierSegment, Line and Arc.
+        """
+        boxes = [thing.xbox() for thing in self]
+        return \
+            min(b[0] for b in boxes), \
+            max(b[1] for b in boxes)
+
+    def ybox(self):
+        """
+        Returns ymin, ymax: smallest and lowest y-coordinates of curve.
+        Overwritten by BezierSegment, Line and Arc.
+        """
+        boxes = [thing.ybox() for thing in self]
+        return \
+            min(b[0] for b in boxes), \
+            max(b[1] for b in boxes)
 
     def bbox(self):
-        """returns a bounding box for the Curve in the form
-        (xmin, xmax, ymin, ymax)."""
-        bbs = [s.bbox() for s in segment_iterator_of(self)]
-        xmins, xmaxs, ymins, ymaxs = list(zip(*bbs))
-        xmin = min(xmins)
-        xmax = max(xmaxs)
-        ymin = min(ymins)
-        ymax = max(ymaxs)
+        """
+        Returns the bounding box for the curve in the form xmin, xmax, ymin,
+        ymax.
+        """
+        xmin, xmax = self.xbox()
+        ymin, ymax = self.ybox()
         return xmin, xmax, ymin, ymax
 
+    @property
+    def xmin(self):
+        return self.xbox()[0]
+
+    @property
+    def xmax(self):
+        return self.xbox()[1]
+
+    @property
+    def ymin(self):
+        return self.ybox()[0]
+
+    @property
+    def ymax(self):
+        return self.ybox()[1]
+
     def point_outside(self):
-        """ returns an arbitrary point outside the curve's bounding box """
+        """
+        Returns an arbitrary point outside the curve's bounding box.
+        """
         xmin, xmax, ymin, ymax = self.bbox()
         return xmin - 42 + (ymin - 43) * 1j
 
     def normal(self, param_or_address):
-        """returns the (right hand rule) unit normal vector to self at the
+        """
+        Returns the (right hand rule) unit normal vector to self at the
         global time parameter specified by 'param_or_address'. (Nb: 'global'
         means 'W' for paths, 'T' for subpaths, 't' for segments.)
 
         E.g., call as 'Path.normal(0.5)', 'Path.normal(Address(W=0.5))', etc.
         """
-        return - 1j * self.unit_tangent(param_or_address)
+        return -1j * self.unit_tangent(param_or_address)
 
     @property
     def start(self):
@@ -1705,16 +2329,15 @@ class Curve(object):
     def end(self, val):
         raise Exception("Sorry, segments are immutable!")
 
+    def num_segments(self):
+        return num_segments_in(self)
+
 
 class ContinuousCurve(Curve):
     pass
 
 
 class Segment(ContinuousCurve):
-    def _repr_options_init(self):
-        Curve._repr_options_init(self)
-        self._repr_use_oneline = True
-
     def curvature(self, t_or_address, use_inf=False):
         """returns the curvature of the segment at t.
 
@@ -1752,9 +2375,6 @@ class Segment(ContinuousCurve):
             np.seterr(**old_np_seterr)
         return kappa
 
-    def self_level_parameter_of(self, address):
-        return address.t
-
     def segment_at_address(self, address):
         return self
 
@@ -1766,6 +2386,106 @@ class Segment(ContinuousCurve):
 
     def is_or_has_arc(self):
         return isinstance(self, Arc)
+
+    def is_vertical(self):
+        # overwritten by Line
+        return False
+
+    def is_horizontal(self):
+        # overwritten by Line
+        return False
+
+    def first_segment(self):
+        return self
+
+    def last_segment(self):
+        return self
+
+    def matched_end_with_start_of(self, other):
+        other = other.first_segment()
+        if other is None:
+            raise ValueError("'None' segment in Segment.matched_end_with_start_of")
+
+        if self.end == other.start:
+            return self.cloned()
+
+        if not np.isclose(self.end, other.start):
+            raise ValueError("unexpected distance in matched_end_with_start_of")
+
+        if self.is_vertical() and \
+           other.is_vertical() and \
+           self.end.real != other.start.real:
+            raise ValueError("incompatibility between vertical segments in"
+                             "Segment.matched_end_with_start_of")
+
+        if self.is_horizontal() and \
+           other.is_horizontal() and \
+           self.end.imag != other.start.imag:
+            raise ValueError("incompatibility between horizontal segments in"
+                             "Segment.matched_end_with_start_of")
+
+        if self.is_vertical():
+            new_x = self.end.real
+
+        elif other.is_vertical():
+            new_x = other.start.real
+
+        else:
+            new_x = (self.end.real + other.start.real) * 0.5
+
+        if self.is_horizontal():
+            new_y = self.start.imag
+
+        elif other.is_horizontal():
+            new_y = other.start.imag
+
+        else:
+            new_y = (self.end.imag + other.start.imag) * 0.5
+
+        return self.tweaked(end=new_x + 1j * new_y)
+
+    def matched_start_with_end_of(self, other):
+        other = other.last_segment()
+        if other is None:
+            raise ValueError("'None' segment in Segment.matched_start_with_end_of")
+
+        if self.start == other.end:
+            return self.cloned()
+
+        if not np.isclose(self.start, other.end):
+            raise ValueError("unexpected distance in matched_end_with_start_of")
+
+        if self.is_vertical() and \
+           other.is_vertical() and \
+           self.start.real != other.end.real:
+            raise ValueError("incompatibility between vertical segments in"
+                             "Segment.matched_start_with_end_of")
+
+        if self.is_horizontal() and \
+           other.is_horizontal() and \
+           self.start.imag != other.end.imag:
+            raise ValueError("incompatibility between horizontal segments in"
+                             "Segment.matched_start_with_end_of")
+
+        if self.is_vertical():
+            new_x = self.start.real
+
+        elif other.is_vertical():
+            new_x = other.end.real
+
+        else:
+            new_x = (self.start.real + other.end.real) * 0.5
+
+        if self.is_horizontal():
+            new_y = self.start.imag
+
+        elif other.is_horizontal():
+            new_y = other.end.imag
+
+        else:
+            new_y = (self.start.imag + other.end.imag) * 0.5
+
+        return self.tweaked(start=new_x + 1j * new_y)
 
 
 class BezierSegment(Segment):
@@ -1798,11 +2518,11 @@ class BezierSegment(Segment):
             if wo1.end != wo2.start:
                 assert np.isclose(wo1.end, wo2.start)
                 wo2[0]._start = wo1.end
-                wo2.basic_reset()
+                wo2._reset()
             if wi2.end != wi1.start:
                 assert np.isclose(wi2.end, wi1.start)
                 wi1[0]._start = wi2.end
-                wi1.basic_reset()
+                wi1._reset()
             way_out  = wo1.extend(wo2)
             way_in   = wi2.extend(wi1)
             skeleton = sk1.extend(sk2)
@@ -1813,9 +2533,11 @@ class BezierSegment(Segment):
         return self.pro_offset(amount, quality, safety)[0]
 
     def radialrange(self, origin, return_all_global_extrema=False):
-        """returns the tuples (d_min, address_min) and (d_max, address_max)
+        """
+        Returns the tuples (d_min, address_min) and (d_max, address_max)
         which minimize and maximize, respectively, the distance
-        d = |self.point(address.t) - origin|."""
+        d = |self.point(address.t) - origin|.
+        """
         min_d_and_t, max_d_and_t = bezier_radialrange(
             self,
             origin,
@@ -1828,14 +2550,33 @@ class BezierSegment(Segment):
             ValueAddressPair(value=min_d_and_t[0], address=Address(t=min_d_and_t[1])), \
             ValueAddressPair(value=max_d_and_t[0], address=Address(t=max_d_and_t[1]))
 
-        # return ((min_d_and_t[0], Address(t=min_d_and_t[1])),
-        #         (max_d_and_t[0], Address(t=max_d_and_t[1])))
+    @property
+    def xmin(self):
+        xmin, _ = bezier_xbox(self)
+        return xmin
 
-    def bbox(self):
-        """(overwritten by Line)"""
-        """returns the bounding box for the segment in the form
-        (xmin, xmax, ymin, ymax)."""
-        return bezier_bounding_box(self)
+    @property
+    def xmax(self):
+        _, xmax = bezier_xbox(self)
+        return xmax
+
+    @property
+    def ymin(self):
+        ymin, _ = bezier_ybox(self)
+        return ymin
+
+    @property
+    def ymax(self):
+        _, ymax = bezier_ybox(self)
+        return ymax
+
+    def xbox(self):
+        # Overwritten by Line
+        return bezier_xbox(self)
+
+    def ybox(self):
+        # Overwritten by Line
+        return bezier_ybox(self)
 
     def unit_tangent(self, t_or_address):
         """
@@ -1844,8 +2585,7 @@ class BezierSegment(Segment):
         returns the unit tangent vector of the segment at t (centered at the
         origin and expressed as a complex number).  If the tangent vector's
         magnitude is zero, this method will find the limit of
-        self.derivative(tau) / abs(self.derivative(tau)) as tau approaches
-        t.
+        self.derivative(u) / abs(self.derivative(u)) as u approaches t.
         """
         t = address2param(self, t_or_address)
         return bezier_unit_tangent(self, t)
@@ -2000,15 +2740,45 @@ class BezierSegment(Segment):
         return CubicBezier(start, control1, control2, end)
 
 
+def extract_complex(thing):
+    if isinstance(thing, Number):
+        return thing
+
+    if isinstance(thing, np.ndarray):
+        m, n = thing.shape()
+        if m >= 2 and n == 1:
+            x = float(thing[0, 0])
+            y = float(thing[1, 0])
+            return x + 1j * y
+
+    try:
+        x = float(thing.x)
+        y = float(thing.y)
+        return x + 1j * y
+    except AttributeError:
+        pass
+
+    try:
+        try:
+            x = float(thing['x'])
+            y = float(thing['y'])
+            return x + 1j * y
+        except KeyError:
+            raise TypeError
+    except TypeError:
+        pass
+
+    raise ValueError("Unable to extract complex number from argument")
+
+
 class Line(BezierSegment):
+    _class_repr_options = _load_repr_options_for('line')
+
     def __init__(self, start, end):
-        self._start = start
-        self._end = end
+        self._start = extract_complex(start)
+        self._end = extract_complex(end)
         self._repr_options_init()
         self._field_names = ['start', 'end']
-
-    def shortname(self):
-        return 'line'
 
     def tweaked(self, start=None, end=None):
         start = start if start is not None else self._start
@@ -2018,12 +2788,25 @@ class Line(BezierSegment):
     def point(self, t_or_address):
         """returns the coordinates of the Bezier curve evaluated at t."""
         t = address2param(self, t_or_address)
-        # (**) important: do NOT rewrite the upcoming line as
-        #
-        #      self._start + t * (self._end - self._start)
-        #
-        # or else self.point(1) == self._end will no longer hold, in general
-        return self._end * t + self._start * (1 - t)
+
+        # the following fanciness in order not to corrupt x/y coordinates
+        # in vertical/horizontal lines, respectively:
+
+        if self._start.real == self._end.real:
+            real_part = self._start.real
+        else:
+            # !!! do not rewrite as combination of the form
+            # "start + t * (end - start)":
+            real_part = (1 - t) * self._start.real + t * self._end.real
+
+        if self._start.imag == self._end.imag:
+            imag_part = self._start.imag
+        else:
+            # !!! do not rewrite as combination of the form
+            # "start + t * (end - start)":
+            imag_part = (1 - t) * self._start.imag + t * self._end.imag
+
+        return complex(real_part, imag_part)
 
     def length(self, t0=0, t1=1, error=None, min_depth=None):
         """
@@ -2078,14 +2861,31 @@ class Line(BezierSegment):
         """returns a copy of the Line object with its orientation reversed"""
         return Line(self._end, self._start)
 
-    def bbox(self):
-        """returns the bounding box for the segment in the form
-        (xmin, xmax, ymin, ymax)."""
-        xmin = min(self._start.real, self._end.real)
-        xmax = max(self._start.real, self._end.real)
-        ymin = min(self._start.imag, self._end.imag)
-        ymax = max(self._start.imag, self._end.imag)
-        return xmin, xmax, ymin, ymax
+    def xbox(self):
+        return \
+            min(self._start.real, self._end.real), \
+            max(self._start.real, self._end.real)
+
+    def ybox(self):
+        return \
+            min(self._start.imag, self._end.imag), \
+            max(self._start.imag, self._end.imag)
+
+    # @property
+    # def xmin(self):
+    #     return min(self._start.real, self._end.real)
+
+    # @property
+    # def xmax(self):
+    #     return max(self._start.real, self._end.real)
+
+    # @property
+    # def ymin(self):
+    #     return min(self._start.imag, self._end.imag)
+
+    # @property
+    # def ymax(self):
+    #     return max(self._start.imag, self._end.imag)
 
     def cropped(self, t0_or_address, t1_or_address):
         """returns a cropped copy of this segment which starts at
@@ -2104,24 +2904,38 @@ class Line(BezierSegment):
         n = self.normal(0)
         return Line(self._start + amount * n, self._end + amount * n)
 
+    def is_horizontal(self):
+        return self._start.imag == self._end.imag
+
+    def is_vertical(self):
+        return self._start.real == self._end.real
+
+    def x(self):
+        if not self.is_vertical():
+            raise ValueError(".x() not defined on non-vertical line segment")
+        return self._start.real
+
+    def y(self):
+        if not self.is_horizontal():
+            raise ValueError(".x() not defined on non-horizontal line segment")
+        return self._start.imag
+
 
 class QuadraticBezier(BezierSegment):
-    # [vistuleB says: I don't understand the following line]
-    # For compatibility with old pickle files.
-    _length_info = {'length': None, 'bpoints': None}
+    _class_repr_options = _load_repr_options_for('quadratic')
 
     def __init__(self, start, control, end):
-        self._start = start
-        self._end = end
-        self._control = control
+        self._start = extract_complex(start)
+        self._control = extract_complex(control)
+        self._end = extract_complex(end)
         self._repr_options_init()
         self._field_names = ['start', 'control', 'end']
 
         # used to know if self._length needs to be updated:
         self._length_info = {'length': None, 'bpoints': None}
 
-    def shortname(self):
-        return 'quadratic'
+    # def shortname(self):
+    #     return 'quadratic'
 
     def tweaked(self, start=None, control=None, end=None):
         start = start if start is not None else self._start
@@ -2129,14 +2943,7 @@ class QuadraticBezier(BezierSegment):
         end = end if end is not None else self._end
         return QuadraticBezier(start, control, end)
 
-    def is_smooth_from(self, previous, warning_on=True):
-        """[Warning: The name of this method is somewhat misleading (yet kept
-        for compatibility with scripts created using svg.path 2.0).  This
-        method is meant only for d string creation and should not be used to
-        check for kinks.  To check a segment for differentiability, use the
-        joins_smoothly_with() method instead.]"""
-        if warning_on:
-            warn(_is_smooth_from_warning)
+    def can_use_T_from_previous(self, previous):
         if isinstance(previous, QuadraticBezier):
             return (self._start == previous.end and
                     (self._control - self._start) == (
@@ -2197,10 +3004,6 @@ class QuadraticBezier(BezierSegment):
         else:
             return s
 
-    # def bpoints(self):
-    #     """returns the Bezier control points of the segment."""
-    #     return self._start, self._control, self._end
-
     @property
     def bpoints(self):
         return self._start, self._control, self._end
@@ -2252,17 +3055,23 @@ class QuadraticBezier(BezierSegment):
     def control(self, val):
         raise Exception("Sorry, segments are immutable!")
 
+    @property
+    def control1(self):
+        return self._control
+
+    @control1.setter
+    def control1(self, val):
+        raise Exception("Sorry, segments are immutable!")
+
 
 class CubicBezier(BezierSegment):
-    # For compatibility with old pickle files.
-    _length_info = {'length': None, 'bpoints': None, 'error': None,
-                    'min_depth': None}
+    _class_repr_options = _load_repr_options_for('cubic')
 
     def __init__(self, start, control1, control2, end):
-        self._start = start
-        self._control1 = control1
-        self._control2 = control2
-        self._end = end
+        self._start = extract_complex(start)
+        self._control1 = extract_complex(control1)
+        self._control2 = extract_complex(control2)
+        self._end = extract_complex(end)
         self._repr_options_init()
         self._field_names = ['start', 'control1', 'control2', 'end']
 
@@ -2270,8 +3079,8 @@ class CubicBezier(BezierSegment):
         self._length_info = {'length': None, 'bpoints': None, 'error': None,
                              'min_depth': None}
 
-    def shortname(self):
-        return 'cubic'
+    # def shortname(self):
+    #     return 'cubic'
 
     def tweaked(self, start=None, control1=None, control2=None, end=None):
         start = start if start is not None else self._start
@@ -2280,14 +3089,7 @@ class CubicBezier(BezierSegment):
         end = end if end is not None else self._end
         return CubicBezier(start, control1, control2, end)
 
-    def is_smooth_from(self, previous, warning_on=True):
-        """[Warning: The name of this method is somewhat misleading (yet kept
-        for compatibility with scripts created using svg.path 2.0).  This
-        method is meant only for d string creation and should not be used to
-        check for kinks.  To check a segment for differentiability, use the
-        joins_smoothly_with() method instead.]"""
-        if warning_on:
-            warn(_is_smooth_from_warning)
+    def can_use_S_from_previous(self, previous):
         if isinstance(previous, CubicBezier):
             return (self._start == previous.end and
                     (self._control1 - self._start) == (
@@ -2332,7 +3134,7 @@ class CubicBezier(BezierSegment):
 
         # using scipy.integrate.quad is quick
         if _quad_available:
-            s = quad(lambda tau: abs(self.derivative(tau)),
+            s = quad(lambda u: abs(self.derivative(u)),
                      t0, t1, epsabs=error, limit=1000)[0]
         else:
             s = segment_length(self, t0, t1, self.point(t0), self.point(t1),
@@ -2423,6 +3225,8 @@ class CubicBezier(BezierSegment):
 
 
 class Arc(Segment):
+    _class_repr_options = _load_repr_options_for('arc')
+
     def __init__(self, start, radius, rotation, large_arc, sweep, end,
                  autoscale_radius=True):
         """
@@ -2445,8 +3249,8 @@ class Arc(Segment):
             Note:  If no such ellipse exists, the radius will be scaled so
             that one does (unless autoscale_radius is set to False).
         rotation : float
-            This is the CCW angle (in degrees) from the positive x - axis of
-            the current coordinate system to the x - axis of the ellipse.
+            This is the CCW angle (in degrees) from the positive x-axis of
+            the current coordinate system to the x-axis of the ellipse.
         large_arc : bool
             Given two points on an ellipse, there are two elliptical arcs
             connecting those points, the first going the short way around the
@@ -2503,12 +3307,13 @@ class Arc(Segment):
         assert start != end
         assert radius.real != 0 and radius.imag != 0
 
-        self._start = start
-        self._radius = abs(radius.real) + 1j * abs(radius.imag)
-        self._rotation = rotation
+        self._start = extract_complex(start)
+        r = extract_complex(radius)
+        self._radius = abs(r.real) + 1j * abs(r.imag)
+        self._rotation = float(rotation)
         self._large_arc = bool(large_arc)
         self._sweep = bool(sweep)
-        self._end = end
+        self._end = extract_complex(end)
         self.autoscale_radius = autoscale_radius
 
         self._repr_options_init()
@@ -2522,8 +3327,8 @@ class Arc(Segment):
         # Derive derived parameters
         self._parameterize()
 
-    def shortname(self):
-        return 'arc'
+    # def shortname(self):
+    #     return 'arc'
 
     def tweaked(self, start=None, radius=None, rotation=None,
                 large_arc=None, sweep=None, end=None, autoscale_radius=None):
@@ -2808,7 +3613,7 @@ class Arc(Segment):
         t0 = address2param(self, t0)
         t1 = address2param(self, t1)
         if _quad_available:
-            return quad(lambda tau: abs(self.derivative(tau)), t0, t1,
+            return quad(lambda u: abs(self.derivative(u)), t0, t1,
                         epsabs=error, limit=1000)[0]
         else:
             return segment_length(self, t0, t1, self.point(t0),
@@ -2958,54 +3763,108 @@ class Arc(Segment):
     def offset(self, amount, quality=0.01, safety=5):
         return self.pro_offset(amount, quality, safety)[0]
 
-    def bbox(self):
-        """returns a bounding box for the segment in the form
-        (xmin, xmax, ymin, ymax)."""
-        # a(t) = radians(self.theta + self.delta * t)
-        #      = (2 * pi / 360) * (self.theta + self.delta * t)
-        # x'=0: ~~~~~~~~~
-        # - rx * cos(phi) * sin(a(t)) = ry * sin(phi) * cos(a(t))
-        # - (rx / ry) * cot(phi) * tan(a(t)) = 1
-        # a(t) = arctan(- (ry / rx)tan(phi)) + pi * k === atan_x
-        # y'=0: ~~~~~~~~~~
-        # rx * sin(phi) * sin(a(t)) = ry * cos(phi) * cos(a(t))
-        # (rx / ry) * tan(phi) * tan(a(t)) = 1
-        # a(t) = arctan((ry / rx) * cot(phi))
-        # atanres = arctan((ry / rx) * cot(phi)) === atan_y
-        # ~~~~~~~~
-        # (2 * pi / 360) * (self.theta + self.delta * t) = atanres + pi * k
-        # Therfore, for both x' and y', we have...
-        # t = ((atan_{x / y} + pi * k) * (360 / (2 * pi)) - self.theta) / self.delta
-        # for all k s.t. 0 < t < 1
-        from math import atan, tan
+    def _box_helper(self, atan2_value):
+        A = 360 * atan2_value / tau - self.theta
+        B = self.delta
+        points = [self._start, self._end]
+        for k in range(ceil(-A / 180), floor((B - A) / 180) + 1):
+            t = (A + k * 180) / B
+            assert 0 <= t <= 1
+            points.append(self.point(t))
+        return points
 
-        if cos(self.phi) == 0:
-            atan_x = pi / 2
-            atan_y = 0
+    def xbox(self):
+        # in-house radian angle as a function of t, 0 <= t <= 1
+        # a(t) := (tau/360) * (self.theta + self.delta*t)
 
-        elif sin(self.phi) == 0:
-            atan_x = 0
-            atan_y = pi / 2
+        # position as a function of t, pre-rotation:
+        # (X, Y) := (rx*cos(a(t)), ry*sin(a(t)))
 
-        else:
-            rx, ry = self._radius.real, self._radius.imag
-            atan_x = atan(- (ry / rx) * tan(self.phi))
-            atan_y = atan((ry / rx) / tan(self.phi))
+        # post-rotation, with p := self.phi:
+        # (X*cos(p) - Y*sin(p),
+        #  X*sin(p) + Y*cos(p))
 
-        def angle_inv(ang, k):  # inverse of angle from Arc.derivative()
-            return (degrees(ang + pi * k) - self.theta) / self.delta
+        # x-coordinate thereof:
+        # rx*cos(a(t))*cos(p) - ry*sin(a(t))*sin(p)
 
-        xtrema = [self._start.real, self._end.real]
-        ytrema = [self._start.imag, self._end.imag]
+        # x'(t) is therefore:
+        # -rx*sin(a(t))*cos(p)*a'(t) - ry*cos(a(t))*sin(p)*a'(t)
 
-        for k in range(- 4, 5):
-            tx = angle_inv(atan_x, k)
-            ty = angle_inv(atan_y, k)
-            if 0 <= tx <= 1:
-                xtrema.append(self.point(tx).real)
-            if 0 <= ty <= 1:
-                ytrema.append(self.point(ty).imag)
-        return min(xtrema), max(xtrema), min(ytrema), max(ytrema)
+        # assuming a'(t) =/= 0, x' == 0 if and only if:
+        #      rx*sin(a(t))*cos(p) + ry*cos(a(t))*sin(p) == 0
+        # <==> det([[cos(a(t)), -rx*cos(p)],
+        #           [sin(a(t)), ry*sin(p)]]) == 0
+
+        # so (cos(a(t)), sin(a(t))) is colinear with (-rx*cos(p), ry*sin(p))
+        # so a(t) = atan2(ry*sin(p), -rx*cos(p)) + k*(tau/2)
+
+        # and t = ((360/tau)*(atan2(ry*sin(p), -rx*cos(p)) + k*(tau/2)) - self.theta)/self.delta
+        #       = ((360/tau)*(atan2(ry*sin(p), -rx*cos(p))) - self.theta + k*180)/self.delta
+
+        # and 0 <= t <= 1 if and only if
+        #      0 <= ((360/tau)*(atan2(ry*sin(p), -rx*cos(p))) - self.theta) + k*180 <= self.delta
+        # <==> 0 <= A + k*180 <= B
+        # with A := (360/tau)*(atan2(ry*sin(p), -rx*cos(p))) - self.theta
+        #      B := self.delta
+
+        # also:
+        # -A/180 <= k <= (B - A)/180
+        # and:
+        # t = ((360/tau)*(atan2(ry*sin(p), -rx*cos(p))) - self.theta + k*180)/self.delta
+        #   = (A + k*180)/B
+
+        p, rx, ry = self.phi, self._radius.real, self._radius.imag
+        candidate_extrema = self._box_helper(atan2(ry * sin(p), -rx * cos(p)))
+        return \
+            min(p.real for p in candidate_extrema), \
+            max(p.real for p in candidate_extrema)
+
+    def ybox(self):
+        # in-house radian angle as a function of t, 0 <= t <= 1
+        # a(t) := (tau/360) * (self.theta + self.delta*t)
+
+        # position as a function of t, pre-rotation:
+        # (X, Y) := (rx*cos(a(t)), ry*sin(a(t)))
+
+        # post-rotation, with p := self.phi:
+        # (X*cos(p) - Y*sin(p),
+        #  X*sin(p) + Y*cos(p))
+
+        # y-coordinate thereof:
+        # rx*cos(a(t))*sin(p) + ry*sin(a(t))*cos(p)
+
+        # y'(t) is therefore:
+        # -rx*sin(a(t))*sin(p)*a'(t) + ry*cos(a(t))*cos(p)*a'(t)
+
+        # and y'(t) == 0 implies (assuming self.delta > 0):
+        #      -rx*sin(a(t))*sin(p) + ry*cos(a(t))*cos(p) == 0
+        # <==> det([[cos(a(t)), rx*sin(p)],
+        #           [sin(a(t)), ry*cos(p)]]) == 0
+
+        # so (cos(a(t)), sin(a(t))) is colinear with (rx*sin(p), ry*cos(p))
+        # so a(t) = atan2(ry*cos(p), rx*sin(p)) + k*(tau/2)
+
+        # and t = (a(t) * (360/tau) - self.theta)/self.delta
+        #       = ((atan2(ry*cos(p), rx*sin(p)) + k*(tau/2)) * (360/tau) - self.theta)/self.delta
+        #       = ((360/tau) * atan2(ry*cos(p), rx*sin(p)) - self.theta + k*180)/self.delta
+
+        # and 0 <= t <= 1 if and only if
+        #      0 <= (360 / tau) * atan2(ry*cos(p), rx*sin(p)) - self.theta + k*180 <= self.delta
+        # <==> 0 <= A + k * 180 <= B
+        # with A := (360/tau) * atan2(ry*cos(p), rx*sin(p)) - self.theta
+        #      B := self.delta
+
+        # also:
+        # -A/180 <= k <= (B-A)/180
+        # and:
+        # t = ((360/tau) * atan2(ry*cos(p), rx*sin(p)) - self.theta + k*180)/self.delta
+        #   = (A + k*180)/B
+
+        p, rx, ry = self.phi, self._radius.real, self._radius.imag
+        candidate_extrema = self._box_helper(atan2(ry * cos(p), rx * sin(p)))
+        return \
+            min(p.imag for p in candidate_extrema), \
+            max(p.imag for p in candidate_extrema)
 
     def split(self, t):
         """returns two segments, whose union is this segment and which join
@@ -3121,50 +3980,37 @@ class Subpath(ContinuousCurve, MutableSequence):
     Note that Subpath has its own d() function and can be used autonomously
     from Path.
     """
+    _class_repr_options = _load_repr_options_for('subpath')
 
-    def __init__(self, *things):
+    def __init__(self, *things, wiggle_endpoints_into_place=True):
         self.debug = False
-        self._start = None
-        self._end = None
         self._Z = False
         self._segments = []
         self._repr_options_init()
         self._field_names = []
         for s in things:
-            self.append(s)  # ends up calling .insert which itself calls .splice
-        self.basic_reset()
+            self.append(s, wiggle_endpoints_into_place)  # ends up calling .insert which itself calls .splice
+        self._reset()
 
-    def shortname(self):
-        return 'subpath'
+    # def shortname(self):
+    #     return 'subpath'
 
-    def basic_reset(self):
+    def _reset(self):
         self._length = None
         self._lengths = None
-        if len(self) > 0:
-            self._start = self._segments[0].start
-            self._end = self._segments[-1].end
-            if self._Z and self._start != self._end:
-                self._Z = False
-        else:
-            self._start = None
-            self._end = None
+        if self._Z and (len(self) == 0 or self[0].start != self[-1].end):
             self._Z = False
-        self.check_health()
+        self._check_health()
+        return self  # so that callers who return self can save a line
 
-    def check_health(self):
+    def _check_health(self):
         assert all(isinstance(thing, Segment) for thing in self)
+
         for s, t in zip(self, self[1:]):
             assert s.end == t.start
+
         if self._Z:
-            assert len(self) > 0
-            assert self[0].start == self[-1].end
-        if len(self) > 0:
-            assert self[0].start == self._start
-            assert self[-1].end == self._end
-        else:
-            assert self._Z is False
-            assert self._start is None
-            assert self._end is None
+            assert self.start_equals_end()
 
     def __normalize_index(self, index, max):
         if index < 0:
@@ -3173,7 +4019,7 @@ class Subpath(ContinuousCurve, MutableSequence):
             raise ValueError("index out of bounds")
         return index
 
-    def __getitem__(self, index):   # (MutableSequence abstract class)
+    def __getitem__(self, index):  # (MutableSequence abstract class)
         return self._segments[index]
 
     def __setitem__(self, index, value):  # (MutableSequence abstract class)
@@ -3191,6 +4037,9 @@ class Subpath(ContinuousCurve, MutableSequence):
 
     def __len__(self):
         return len(self._segments)  # (MutableSequence abstract class)
+
+    def append(self, thing, wiggle_endpoints_into_place=True):
+        self.splice(len(self), len(self), thing, wiggle_endpoints_into_place)
 
     def insert(self, index, value):  # (MutableSequence abstract class)
         if index < 0:
@@ -3212,6 +4061,18 @@ class Subpath(ContinuousCurve, MutableSequence):
     def mod_index(self, index, use_Z):
         return index if not use_Z or not self._Z else index % len(self)
 
+    def first_segment(self):
+        if not len(self):
+            return None
+        assert isinstance(self._segments[0], Segment)
+        return self._segments[0]
+
+    def last_segment(self):
+        if not len(self):
+            return None
+        assert isinstance(self._segments[-1], Segment)
+        return self._segments[-1]
+
     def prev_segment(self, index, use_Z=False):
         assert 0 <= index <= len(self)
         prev_index = self.mod_index(index - 1, use_Z)
@@ -3230,20 +4091,21 @@ class Subpath(ContinuousCurve, MutableSequence):
     def prepend(self, value):
         return self.insert(0, value)
 
-    def splice(self, start_index, end_index, value):
+    def splice(self, start_index, end_index, value, wiggle_endpoints_into_place=True):
         """
         replaces segments of indices start_index, ..., end_index - 1 with
         the (segments in) value, which may be a segment, a subpath, or a
         "naively continuous" path, as long as no discontinuity is induced; if
         end_index == start_index, no segments are replaced, and insertion
         occurs right before the segment at start_index == end_index, so that
-        the first inersted segment has index start_index. Can be used with an
+        the first ted segment has index start_index. Can be used with an
         empty value (of type Path or Subpath), in which case the effect is
         only to delete the segments in the sequence start_index, ...,
         end_index - 1
         """
         # assertions / checking
-        assert isinstance(value, Curve) or value is None
+        if not isinstance(value, Curve) and value is not None:
+            raise ValueError("expecting instance of Curve")
 
         if isinstance(value, Path) and not value.is_naively_continuous():
             raise ValueError("Subpath.splice fed path with discontinuity")
@@ -3269,10 +4131,41 @@ class Subpath(ContinuousCurve, MutableSequence):
 
         else:
             if prev and prev.end != value.start:
-                raise ValueError("Subpath.splice .start discontinuity")
+                if wiggle_endpoints_into_place and \
+                   np.isclose(prev.end, value.start):
+                    new_prev = prev.matched_end_with_start_of(value.first_segment())
+                    new_value = value.matched_start_with_end_of(prev)
+                    prev_index = self.mod_index(start_index - 1, use_Z=True)
+                    assert 0 <= prev_index < len(self)
+                    assert prev is self._segments[prev_index]
+                    self._segments[prev_index] = prev = new_prev
+                    value = new_value
+                    assert prev.end == value.start
+
+                    # reset next, as well...
+                    next = self.next_segment(end_index - 1, use_Z=True)
+
+                else:
+                    raise ValueError("Subpath.splice .start discontinuity")
 
             if next and next.start != value.end:
-                raise ValueError("Subpath.splice .end discontinuity", next.start, value.end)
+                if wiggle_endpoints_into_place and \
+                   np.isclose(next.start, value.end):
+                    new_next = next.matched_start_with_end_of(value.last_segment())
+                    new_value = value.matched_end_with_start_of(next)
+                    next_index = self.mod_index(end_index, True)
+                    assert 0 <= next_index < len(self)
+                    assert next is self._segments[next_index]
+                    self._segments[next_index] = next = new_next
+                    value = new_value
+                    assert next.start == value.end  # and...
+
+                    # reset prev, as well...
+                    prev = self.prev_segment(start_index, use_Z=True)
+                    assert prev is None or prev.end == value.start
+
+                else:
+                    raise ValueError("Subpath.splice .end discontinuity", next.start, value.end)
 
         # delete
         for i in range(start_index, end_index):
@@ -3282,7 +4175,7 @@ class Subpath(ContinuousCurve, MutableSequence):
         for seg in segment_iterator_of(value, back_to_front=True):
             self._segments.insert(start_index, seg)
 
-        self.basic_reset()
+        self._reset()
 
         return self
 
@@ -3317,7 +4210,7 @@ class Subpath(ContinuousCurve, MutableSequence):
         self._lengths = [each / self._length for each in lengths]
 
     def point(self, T):
-        a = self.T2address(T, trust_existing_fields=True)
+        a = self.T2address(T, trust_existing_fields=True)  # (the customer is always right...)
         return self._segments[a.segment_index].point(a.t)
 
     def length(self, T0=0, T1=1,
@@ -3347,9 +4240,9 @@ class Subpath(ContinuousCurve, MutableSequence):
 
     @property
     def start(self):
-        if not self._start and len(self) > 0:
-            self._start = self._segments[0].start
-        return self._start
+        if len(self) == 0:
+            return None
+        return self[0].start
 
     @start.setter
     def start(self, pt):
@@ -3357,16 +4250,13 @@ class Subpath(ContinuousCurve, MutableSequence):
 
     @property
     def end(self):
-        if not self._end and len(self) > 0:
-            self._end = self._segments[-1].end
-        return self._end
+        if len(self) == 0:
+            return None
+        return self[-1].end
 
     @end.setter
     def end(self, pt):
         raise Exception("Sorry, segments are immutable!")
-
-    # def Z(self):
-    #     return self._Z
 
     @property
     def Z(self):
@@ -3375,16 +4265,46 @@ class Subpath(ContinuousCurve, MutableSequence):
     @Z.setter
     def Z(self, val):
         raise Exception("Please use .set_Z(), .unset_Z()"
-                        "to set Z field of subpath!")
+                        "to set Z field of a subpath!")
 
     def start_equals_end(self):
-        return len(self) > 0 and self._start == self._end
+        return len(self) > 0 and self[0].start == self[-1].end
 
     def is_bezier_subpath(self):
         return all(isinstance(seg, BezierSegment) for seg in self)
 
     def is_or_has_arc(self):
         return any(isinstance(seg, Arc) for seg in self)
+
+    def matched_end_with_start_of(self, other):
+        if len(self) == 0:
+            raise ValueError("Empty subpath cannot tweak its end")
+        our_last = self._segments[-1]
+        new_last = our_last.matched_end_with_start_of(other)
+        assert np.isclose(our_last.end, new_last.end)
+
+        new_segments = list(self._segments)
+        new_segments[-1] = new_last
+        if self._Z:
+            new_segments[0] = new_segments[0].tweaked(start=new_last.end)
+            assert new_segments[0].start == new_segments[-1].end
+
+        return Subpath(*new_segments).set_Z(following=self)
+
+    def matched_start_with_end_of(self, other):
+        if len(self) == 0:
+            raise ValueError("Empty subpath cannot tweak its start")
+        our_first = self._segments[0]
+        new_first = our_first.matched_start_with_end_of(other)
+        assert np.isclose(our_first.start, new_first.start)
+
+        new_segments = list(self._segments)
+        new_segments[0] = new_first
+        if self._Z:
+            new_segments[-1] = new_segments[-1].tweaked(end=new_first.start)
+            assert new_segments[0].start == new_segments[-1].end
+
+        return Subpath(*new_segments).set_Z(following=self)
 
     def d(self,
           previous_segment=None,  # for use with relative coordinates
@@ -3415,7 +4335,7 @@ class Subpath(ContinuousCurve, MutableSequence):
             stripped = value.strip(' ')
             if stripped not in ['', ',']:
                 raise ValueError(f"option '{key}' contains non-whitespace-"
-                                 f"-or-comma, or double comma")
+                                 f"-or-comma, or more than one comma")
 
             if key in _d_string_must_be_pure_spaces_params and stripped != '':
                 raise ValueError(f"option '{key}' containing non-spaces")
@@ -3527,14 +4447,8 @@ class Subpath(ContinuousCurve, MutableSequence):
             previous_command = command
 
         if len(self) == 0:
-            assert self._start is None
-            assert self._end is None
             assert self._Z is False
             return ''
-
-        assert self._start is not None and self._end is not None
-        assert self._start == self._segments[0].start
-        assert self._end == self._segments[-1].end
 
         parts = []
         previous_command = None
@@ -3563,7 +4477,7 @@ class Subpath(ContinuousCurve, MutableSequence):
 
             elif isinstance(segment, CubicBezier):
                 if op['use_S_and_T'] and \
-                   segment.is_smooth_from(previous_segment, warning_on=False):
+                   segment.can_use_S_from_previous(previous_segment):
                     append_command('S')
                     append_cor(segment.control2)
                     append_cor(segment.end, segment_end=True)
@@ -3576,7 +4490,7 @@ class Subpath(ContinuousCurve, MutableSequence):
 
             elif isinstance(segment, QuadraticBezier):
                 if op['use_S_and_T'] and \
-                   segment.is_smooth_from(previous_segment, warning_on=False):
+                   segment.can_use_T_from_previous(previous_segment):
                     append_command('T')
                     append_cor(segment.end, segment_end=True)
 
@@ -3601,13 +4515,10 @@ class Subpath(ContinuousCurve, MutableSequence):
             previous_segment = segment
 
         if self._Z:
-            assert previous_segment.end == self._start
+            assert previous_segment.end == self[0].start
             append_command('Z')
 
         return ''.join(parts)
-
-    def self_level_parameter_of(address):
-        return address.T
 
     def subpath_at_address(self, address):
         return self
@@ -3615,7 +4526,7 @@ class Subpath(ContinuousCurve, MutableSequence):
     def segment_at_address(self, address):
         return self[address.segment_index]
 
-    def T2address(self, T_or_address, trust_existing_fields=False):
+    def T2address(self, T_or_address=2, trust_existing_fields=False):
         """
         creates a new address from a T-value, or completes an partially
         filled address with the T-value set, to an address that its
@@ -3777,8 +4688,9 @@ class Subpath(ContinuousCurve, MutableSequence):
         returns the unit tangent vector of the Subpath at T (centered at the
         origin and expressed as a complex number).  If the tangent vector's
         magnitude is zero, this method will attempt to find the limit of
-        self.derivative(tau) / abs(self.derivative(tau)) as tau approaches T.
-        See the function bezier_unit_tangent for more details."""
+        self.derivative(u) / abs(self.derivative(u)) as u approaches T.
+        See the implementation of bezier_unit_tangent for more details.
+        """
         a = self.T2address(param2address(self, T_or_address))
         return self._segments[a.segment_index].unit_tangent(a.t)
 
@@ -3809,8 +4721,8 @@ class Subpath(ContinuousCurve, MutableSequence):
 
     def area(self, quality=0.01, safety=3):
         """
-        Returns the area enclosed by the subpath, assuming self._end ==
-        self._start, after converting arcs to cubic bezier segments.
+        Returns the area enclosed by the subpath, assuming self.end ==
+        self.start, after converting arcs to cubic bezier segments.
 
         The 'quality' and 'safety' parameters control the latter conversion.
         See the docstring for Subpath.converted_bezier_path for more details.
@@ -3818,7 +4730,11 @@ class Subpath(ContinuousCurve, MutableSequence):
         Note: negative area results from CW (as opposed to CCW)
         parameterization of the Path object.
         """
-        assert self._end == self._start
+        if len(self) == 0:
+            return 0
+
+        assert self.start_equals_end()
+
         cubicized = self.converted_to_bezier(quality=quality,
                                              safety=safety,
                                              reuse_segments=True,
@@ -3833,13 +4749,15 @@ class Subpath(ContinuousCurve, MutableSequence):
         return area_enclosed
 
     def normalize_address(self, a, use_Z=True):
-        """ expects a fully-formed address a; tweaks a like so: if a.t == 0
+        """
+        Expects a fully-formed address a; tweaks a like so: if a.t == 0
         and the preceding segment's t == 1 address points to the same point
         on the subpath (i.e., the previous segment exists!), change a to use
         t == 1 and the segment_index of the previous segment.
 
         The 'use_Z' option determines whether self[len(self) - 1] counts as a
-        "previous segment" of self[0], assuming self.Z == True. """
+        "previous segment" of self[0], assuming self.Z == True.
+        """
         if not a.is_complete(for_object=self):
             raise ValueError("incomplete Subpath address")
 
@@ -3928,9 +4846,8 @@ class Subpath(ContinuousCurve, MutableSequence):
         return intersection_list
 
     def even_odd_encloses(self, pt, ref_point=None):
-        if not self.isloop():
-            raise ValueError("Subpath.even_odd_encloses would rather be"
-                             "called with a topological loop")
+        if not self.Z:
+            raise ValueError("Subpath.even_odd_encloses wants loop")
         if ref_point is None:
             ref_point = self.point_outside()
         intersections = \
@@ -3939,6 +4856,24 @@ class Subpath(ContinuousCurve, MutableSequence):
 
     def union_encloses(self, pt, ref_point=None):
         raise NotImplementedError
+
+    def rotate_by(self, degs, origin=0):
+        self._segments = [rotate(seg, degs, origin) for seg in self]
+        return self._reset()
+
+    def translate_by(self, x, y=0):
+        self._segments = [translate(seg, x, y) for seg in self]
+        return self._reset()
+
+    def scale_by(self, sx, sy=None):
+        self._segments = [scale(seg, sx, sy) for seg in self]
+        return self._reset()
+
+    def transform_by(self, tf):
+        if isinstance(tf, str):
+            tf = parse_transform(tf)
+        self._segments = [transform(seg, tf) for seg in self]
+        return self._reset()
 
     def cropped(self, T0_or_address, T1_or_address, drop_small=False):
         """
@@ -3955,12 +4890,10 @@ class Subpath(ContinuousCurve, MutableSequence):
         a0 = param2address(self, T0_or_address)
         if a0.t is None or a0.segment_index is None:
             self.T2address(a0)
+
         a1 = param2address(self, T1_or_address)
         if a1.t is None or a1.segment_index is None:
             self.T2address(a1)
-
-        # print("a0 in Subpath.cropped:", a0)
-        # print("a1 in Subpath.cropped:", a1)
 
         initial_orientation = (a0 > a1)
 
@@ -3990,14 +4923,18 @@ class Subpath(ContinuousCurve, MutableSequence):
                 for index in range(a0.segment_index + 1, a1.segment_index):
                     to_return.append(self[index])
                 to_return.append(self[a1.segment_index].cropped(0, a1))
+
         elif a0.T > a1.T:
             if not self._Z:
                 raise ValueError("Subpath will not do wraparound crop of"
                                  "non-closed subpath")
+
             else:
-                assert self._start == self._end
-            to_return = self.cropped(a0, 1)
-            to_return.extend(self.cropped(0, a1))
+                assert self.start_equals_end()
+
+            to_return = self.cropped(a0, 1) if a0.T < 1 else Subpath()
+            to_return.extend(self.cropped(0, a1) if a1.T > 0 else Subpath())
+
         else:
             raise ValueError("T0 == T1 in Subpath.cropped().")
 
@@ -4050,20 +4987,19 @@ class Subpath(ContinuousCurve, MutableSequence):
         if len(self) == 0:
             raise ValueError("calling .set_Z() on empty subpath")
 
-        assert self._start == self[0].start
-        assert self._end == self[-1].end
-
         if self._Z:
-            assert self._start == self._end
+            assert self.start_equals_end()
             warn("Z already set is Subpath.set_Z(); ignoring")
+
         else:
-            if self._start != self._end:
+            if not self.start_equals_end():
                 if forceful:
-                    self.append(Line(self._end, self._start))
-                    self.basic_reset()
-                    assert self._start == self._end
+                    self.append(Line(self.end, self.start))
+                    assert self.start_equals_end()
+
                 else:
-                    raise ValueError("self._end != self._start")
+                    raise ValueError("self.end != self.start (use .set_Z(forceful=True) ?)")
+
             self._Z = True
 
         return self
@@ -4156,6 +5092,15 @@ class Subpath(ContinuousCurve, MutableSequence):
 
 
 class Path(Curve, MutableSequence):
+    _class_repr_options = _load_repr_options_for('path')
+
+    @staticmethod
+    def update_class_repr_options(dictionary):
+        for key in dictionary:
+            if key not in Path._class_repr_options:
+                raise ValueError("unknown repr_option:", key)
+        Path._class_repr_options.update(dictionary)
+
     def __init__(self, *things, extend_by_segments=False,
                  clone_affected_subpaths=True):
         self._subpaths = []
@@ -4171,24 +5116,8 @@ class Path(Curve, MutableSequence):
 
         assert all(isinstance(s, Subpath) for s in self._subpaths)
 
-        # finalization
-        self.basic_reset()
-
-    def shortname(self):
-        return 'path'
-
-    def basic_reset(self):
-        self._length = None
-        self._num_segments = sum([len(x) for x in self])
-        self._start = self.recomputed_start()
-        self._end = self.recomputed_end()
-        assert (self._start is None) == \
-               (self._end is None) == \
-               (self._num_segments == 0)
-
-    def num_segments(self):
-        assert self._num_segments == sum([len(x) for x in self])
-        return self._num_segments
+    # def shortname(self):
+    #     return 'path'
 
     def first_nonempty(self):
         for index, x in enumerate(self):
@@ -4202,17 +5131,13 @@ class Path(Curve, MutableSequence):
                 return index, x
         return None
 
-    def recomputed_start(self):
-        for x in self:
-            if len(x) > 0:
-                return x.start
-        return None
+    def first_segment(self):
+        fn = self.first_nonempty()
+        return fn.first_segment() if fn is not None else None
 
-    def recomputed_end(self):
-        for x in reversed(self):
-            if len(x) > 0:
-                return x.end
-        return None
+    def last_segment(self):
+        ln = self.last_nonempty()
+        return ln.last_segment() if ln is not None else None
 
     def __normalize_index(self, index, max):
         if index < 0:
@@ -4231,13 +5156,11 @@ class Path(Curve, MutableSequence):
             return value
         index = self.__normalize_index(index, len(self))
         self._subpaths[index] = value
-        self.basic_reset()
         return value
 
     def __delitem__(self, index):  # (MutableSequence abstract method)
         index = self.__normalize_index(index, len(self) - 1)
         del self._subpaths[index]
-        self.basic_reset()
 
     def __len__(self):  # (MutableSequence abstract method)
         return len(self._subpaths)
@@ -4247,12 +5170,16 @@ class Path(Curve, MutableSequence):
             raise ValueError("value not a Subpath in Path.__setitem__")
         if len(value) > 0 or even_if_empty:
             self._subpaths.insert(index, value)
-            self.basic_reset()
         return value
 
     # provided by MutableSequence: __contains__, __iter__, __reversed__
     #                              index, count, append, reverse, pop,
     #                              remove, __iadd__; extend is overriden
+
+    # Unfortunately we still have to provide our own 'append' implementation
+    # because of the 'even_if_empty' keyword:
+    def append(self, value, even_if_empty=False):
+        self.insert(len(self), value, even_if_empty=even_if_empty)
 
     # I put this here because I think it's faster than letting python
     # figure out the iterator via __getitem__ etc (?)
@@ -4317,12 +5244,13 @@ class Path(Curve, MutableSequence):
 
         assert all(isinstance(s, Subpath) for s in self._subpaths)
 
-        self.basic_reset()
         return self
+
+    def erase(self):
+        self._subpaths = []  # yes boss!
 
     def prepend(self, value, even_if_empty=False):
         self.insert(0, value, even_if_empty=even_if_empty)
-        self.basic_reset()
 
     def reversed(self):
         """
@@ -4367,9 +5295,6 @@ class Path(Curve, MutableSequence):
         return True
 
     def _calc_lengths(self, error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
-        if self._length is not None:
-            return
-
         lengths = [each.length(error=error, min_depth=min_depth) for each in
                    self]
         self._length = sum(lengths)
@@ -4386,33 +5311,37 @@ class Path(Curve, MutableSequence):
     def length(self, W0=0, W1=1,
                error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
         self._calc_lengths(error=error, min_depth=min_depth)
-        a0 = param2address(self, W0)
-        a1 = param2address(self, W1)
+
+        a0 = self.W2address(W0)
+        a1 = self.W2address(W1)
+
         if a0.W == 0 and a1.W == 1:
             return self._length
 
         else:
-            if a1.W <= a0.W:
+            if a1.W < a0.W:
                 raise NotImplementedError
 
             if len(self) == 1:
                 return self[0].length(T0=a0, T1=a1)
 
-            self.W2address(a0)
-            self.W2address(a1)
-
             if a0.subpath_index == a1.subpath_index:
                 return self[a0.subpath_index].length(T0=a0, T1=a1)
 
-            range = range(a0.subpath_index + 1, a1.subpath_index)
+            assert a0.subpath_index < a1.subpath_index
+
             return \
                 self[a0.subpath_index].length(T0=a0) + \
-                sum(self[i].length() for i in range) + \
+                sum(self[i].length() for i in range(a0.subpath_index + 1,
+                                                    a1.subpath_index)) + \
                 self[a1.subpath_index].length(T1=a1)
 
     @property
     def start(self):
-        return self._start
+        for x in self:
+            if len(x) > 0:
+                return x.start
+        return None
 
     @start.setter
     def start(self, pt):
@@ -4420,7 +5349,10 @@ class Path(Curve, MutableSequence):
 
     @property
     def end(self):
-        return self._end
+        for x in reversed(self):
+            if len(x) > 0:
+                return x.end
+        return None
 
     @end.setter
     def end(self, pt):
@@ -4446,9 +5378,6 @@ class Path(Curve, MutableSequence):
             else:
                 ans += s.d(options=op)
         return ans
-
-    def self_level_parameter_of(address):
-        return address.W
 
     def index_or_None(self, thing):
         try:
@@ -4547,6 +5476,18 @@ class Path(Curve, MutableSequence):
         Constructs and returns a full address object from a W value,
         or fills in remaining fields of an unfinished address with a W value.
         """
+        def compute_T_and_subpath_index():
+            self._calc_lengths()
+
+            W0 = 0
+            for index, subpath in enumerate(self._subpaths):
+                W1 = W0 + self._lengths[index]
+                if W <= W1:
+                    return (W - W0) / (W1 - W0), index
+                W0 = W1
+
+            assert 0 <= W <= W1
+            raise BugException
 
         a = W if isinstance(W, Address) else Address(W=W)
 
@@ -4570,27 +5511,29 @@ class Path(Curve, MutableSequence):
             a.t = 0
             return a
 
-        if a.subpath_index is None or a.T is None:
-            if a.subpath_index or a.T:
-                raise ValueError("Address.subpath_index, Address.T in"
-                                 "inconsistent state in Path.W2address")
+        le_T, le_index = compute_T_and_subpath_index()
 
-            self._calc_lengths()
-            W0 = 0
-            found = False
+        if a.subpath_index is None and a.T is None:
+            a.subpath_index = le_index
+            a.T = le_T
 
-            for index, subpath in enumerate(self._subpaths):
-                W1 = W0 + self._lengths[index]
-                if W <= W1:
-                    a.subpath_index = index
-                    a.T = (W - W0) / (W1 - W0)
-                    found = True
-                    break
-                W0 = W1
+        elif a.subpath_index != le_index or a.T != le_T:
+            if (
+                le_T == 1 and
+                le_index == a.subpath_index - 1 and
+                a.T == 0 and
+                a.subpath_index < len(self) and
+                len(self[a.subpath_index]) > 0
+            ):
+                # pre-existing fields look OK, leave this address alone
+                # (the caller may not want to see it change through side effect)
+                pass
 
-            if not found:
-                assert 0 <= W <= W1
-                raise BugException
+            else:
+                print("le_T, le_index:", le_T, le_index)
+                print("a.T, a.subpath_index:", a.T, a.subpath_index)
+                raise ValueError("Incompatible-looking pre-existing "
+                                 "value of T, subpath_index in Path.W2address")
 
         if a.segment_index is None or a.t is None:
             self[a.subpath_index].T2address(a)
@@ -4657,6 +5600,16 @@ class Path(Curve, MutableSequence):
         Subpath.converted_to_bezier().
         """
         return sum([s.area(quality, safety) for s in self])
+
+    def xray(self, x, normalize=True, justonemode=False, tol=1e-12):
+        xmin, xmax, ymin, ymax = self.bbox()
+        ray = Line(start=x + 1j * (ymin - 10), end=x + 1j * (ymax + 10))
+        return self.intersect(ray), ray
+
+    def yray(self, y, normalize=True, justonemode=False, tol=1e-12):
+        xmin, xmax, ymin, ymax = self.bbox()
+        return [a1 for (a1, a2) in self.intersect(Line(start=(xmin - 10) + 1j * y,
+                                                       end=(xmax + 10) + 1j * y))]
 
     def intersect(self, other_curve, normalize=True, justonemode=False,
                   tol=1e-12):
@@ -4758,7 +5711,6 @@ class Path(Curve, MutableSequence):
             else:
                 newsubpaths.append(s)
         self._subpaths = newsubpaths
-        self.basic_reset()
         return self
 
     def smelt_subpaths(self, wraparound=False, clone_affected_subpaths=True):
@@ -4810,7 +5762,28 @@ class Path(Curve, MutableSequence):
             newsubpaths.append(current_subpath)
 
         self._subpaths = newsubpaths
-        self.basic_reset()
+        return self
+
+    def rotate_by(self, degs, origin=0):
+        for subpath in self:
+            subpath.rotate_by(degs, origin)
+        return self
+
+    def translate_by(self, x, y=0):
+        for subpath in self:
+            subpath.translate_by(x, y)
+        return self
+
+    def scale_by(self, sx, sy=None):
+        for subpath in self:
+            subpath.scale_by(sx, sy)
+        return self
+
+    def transform_by(self, tf):
+        if isinstance(tf, str):
+            tf = parse_transform(tf)
+        for subpath in self:
+            subpath.transform_by(tf)
         return self
 
     def cropped(self, W0_or_address, W1_or_address):
@@ -4868,11 +5841,12 @@ class Path(Curve, MutableSequence):
         if a0.W < a1.W:
             if a0.subpath_index == a1.subpath_index:
                 to_return = Path(self[a0.subpath_index].cropped(a0, a1))
+
             else:
-                to_return = Path(self[a0.subpath_index].cropped(a0, 1))
+                to_return = Path(self[a0.subpath_index].cropped(a0.tweaked(W=None, subpath_index=None), 1))
                 for index in range(a0.subpath_index, a1.subpath_index):
                     to_return.append(self[index])
-                to_return.append(self[a1.subpath_index].cropped(0, a1))
+                to_return.append(self[a1.subpath_index].cropped(0, a1.tweaked(W=None, subpath_index=None)))
                 if len(self) == 1 and self[0].Z:
                     assert len(to_return) == 2
                     to_return.smelt_subpaths(wraparound=True)
@@ -4892,8 +5866,28 @@ class Path(Curve, MutableSequence):
 
         return to_return
 
+    def heuristic_crop(self, other_curve, crop_to_inside=True):
+        new_path = heuristic_crop(self, other_curve, crop_to_inside=crop_to_inside)
+        self.erase()
+        self.extend(new_path)
+
     def isloop(self):
         return len(self) == 1 and self[0].Z
+
+    def is_empty(self):
+        return all(len(s) == 0 for s in self)
+
+    def set_Z(self, forceful=False, following=None):
+        if len(self) == 1:
+            self[0].set_Z(forceful, following)
+            return self
+        raise ValueError("ambiguous set_Z command: more or less than one subpath")
+
+    def unset_Z(self):
+        if len(self) == 1:
+            self[0].unset_Z()
+            return self
+        raise ValueError("ambiguous unset_Z command: more or less than one subpath")
 
     def converted_to_bezier(self, quality=0.01, safety=5,
                             reuse_segments=True):

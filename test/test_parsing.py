@@ -20,7 +20,6 @@ def construct_rotation_tf(a, x, y):
 
 
 class TestParser(unittest.TestCase):
-
     def test_svg_examples(self):
         """Examples from the SVG spec"""
         path1 = parse_path('M 100 100 L 300 100 L 200 300 z')
@@ -184,7 +183,7 @@ class TestParser(unittest.TestCase):
                           'M 100 100 L 200 200 Z 100 200')
 
     def test_transform(self):
-        tf_matrix = svgpathtools.parser.parse_transform(
+        tf_matrix = svgpathtools.transform_parser.parse_transform(
             'matrix(1.0 2.0 3.0 4.0 5.0 6.0)')
         expected_tf_matrix = np.identity(3)
         expected_tf_matrix[0:2, 0:3] = np.array([[1.0, 3.0, 5.0],
@@ -196,12 +195,12 @@ class TestParser(unittest.TestCase):
         expected_tf_translate[0, 2] = -36
         self.assertTrue(np.array_equal(
             expected_tf_translate,
-            svgpathtools.parser.parse_transform('translate(-36)')
+            svgpathtools.transform_parser.parse_transform('translate(-36)')
         ))
 
         # Now specify y
         expected_tf_translate[1, 2] = 45.5
-        tf_translate = svgpathtools.parser.parse_transform(
+        tf_translate = svgpathtools.transform_parser.parse_transform(
             'translate(-36 45.5)')
         self.assertTrue(np.array_equal(expected_tf_translate, tf_translate))
 
@@ -211,37 +210,37 @@ class TestParser(unittest.TestCase):
         expected_tf_scale[1, 1] = 10
         self.assertTrue(np.array_equal(
             expected_tf_scale,
-            svgpathtools.parser.parse_transform('scale(10)')
+            svgpathtools.transform_parser.parse_transform('scale(10)')
         ))
 
         # Now specify y
         expected_tf_scale[1, 1] = 0.5
-        tf_scale = svgpathtools.parser.parse_transform('scale(10 0.5)')
+        tf_scale = svgpathtools.transform_parser.parse_transform('scale(10 0.5)')
         self.assertTrue(np.array_equal(expected_tf_scale, tf_scale))
 
-        tf_rotation = svgpathtools.parser.parse_transform('rotate(-10 50 100)')
+        tf_rotation = svgpathtools.transform_parser.parse_transform('rotate(-10 50 100)')
         expected_tf_rotation = construct_rotation_tf(-10, 50, 100)
         self.assertTrue(np.array_equal(expected_tf_rotation, tf_rotation))
 
         # Try a test with no offset specified
         self.assertTrue(np.array_equal(
             construct_rotation_tf(50, 0, 0),
-            svgpathtools.parser.parse_transform('rotate(50)')
+            svgpathtools.transform_parser.parse_transform('rotate(50)')
         ))
 
         expected_tf_skewx = np.identity(3)
         expected_tf_skewx[0, 1] = np.tan(40.0 * np.pi / 180.0)
-        tf_skewx = svgpathtools.parser.parse_transform('skewX(40)')
+        tf_skewx = svgpathtools.transform_parser.parse_transform('skewX(40)')
         self.assertTrue(np.array_equal(expected_tf_skewx, tf_skewx))
 
         expected_tf_skewy = np.identity(3)
         expected_tf_skewy[1, 0] = np.tan(30.0 * np.pi / 180.0)
-        tf_skewy = svgpathtools.parser.parse_transform('skewY(30)')
+        tf_skewy = svgpathtools.transform_parser.parse_transform('skewY(30)')
         self.assertTrue(np.array_equal(expected_tf_skewy, tf_skewy))
 
         self.assertTrue(np.array_equal(
             tf_rotation.dot(tf_translate).dot(tf_skewx).dot(tf_scale),
-            svgpathtools.parser.parse_transform(
+            svgpathtools.transform_parser.parse_transform(
                 """rotate(-10 50 100)
                    translate(-36 45.5)
                    skewX(40)

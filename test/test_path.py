@@ -522,34 +522,6 @@ class TestPath(unittest.TestCase):
         # than good enough.
         self.assertAlmostEqual(path.length(), pi * 75 + 300, places=6)
 
-        # Bumpy path: M600,350 l 50,-25
-        #             a25,25 -30 0,1 50,-25 l 50,-25
-        #             a25,50 -30 0,1 50,-25 l 50,-25
-        #             a25,75 -30 0,1 50,-25 l 50,-25
-        #             a25,100 -30 0,1 50,-25 l 50,-25
-
-        # Commented out because by Andy cause I was skeptical of path.point
-        # ground truth values
-        # path = Path(Line(600 + 350j, 650 + 325j),
-        #             Arc(650 + 325j, 25 + 25j, -30, 0, 1, 700 + 300j),
-        #             Line(700 + 300j, 750 + 275j),
-        #             Arc(750 + 275j, 25 + 50j, -30, 0, 1, 800 + 250j),
-        #             Line(800 + 250j, 850 + 225j),
-        #             Arc(850 + 225j, 25 + 75j, -30, 0, 1, 900 + 200j),
-        #             Line(900 + 200j, 950 + 175j),
-        #             Arc(950 + 175j, 25 + 100j, -30, 0, 1, 1000 + 150j),
-        #             Line(1000 + 150j, 1050 + 125j),
-        #             )
-        # # These are *not* calculated, but just regression tests. Be skeptical.
-        # self.assertAlmostEqual(path.point(0), (600+350j))
-        # self.assertAlmostEqual(path.point(0.3), (755.239799276+212.182020958j))
-        # self.assertAlmostEqual(path.point(0.5), (827.730749264+147.824157418j))
-        # self.assertAlmostEqual(path.point(0.9), (971.284357806+106.302352605j))
-        # self.assertAlmostEqual(path.point(1), (1050+125j))
-        # # The errors seem to accumulate. Still 6 decimal places is more
-        # # than good enough.
-        # self.assertAlmostEqual(path.length(), 928.3886394081095)
-
     def test_repr(self):
         path = Path(
             Line(start=600 + 350j, end=650 + 325j),
@@ -614,105 +586,6 @@ class TestPath(unittest.TestCase):
         with self.assertRaises(ValueError):
             Subpath(a, b, c, d, e)
 
-    # def test_continuous_subpaths(self):
-    #     """Test the Path.continuous_subpaths() method."""
-
-    #     # Continuous and open example
-    #     q = Path(Line(1, 2))
-    #     a = [Path(Line(1, 2))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # # Continuous and closed example
-    #     q = Path(Line(1, 2), Line(2, 1))
-    #     a = [Path(Line(1, 2), Line(2, 1))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = q == Path(*[seg for subpath in subpaths for seg in subpath])
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # Continuous and open example
-    #     q = Path(Line(1, 2), Line(2, 3), Line(3, 4))
-    #     a = [Path(Line(1, 2), Line(2, 3), Line(3, 4))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # Continuous and closed example
-    #     q = Path(Line(1, 2), Line(2, 3), Line(3, 4), Line(4, 1))
-    #     a = [Path(Line(1, 2), Line(2, 3), Line(3, 4), Line(4, 1))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # Discontinuous example
-    #     q = Path(Line(1, 2), Line(2, 3), Line(3, 4),
-    #              Line(10, 11))
-    #     a = [Path(Line(1, 2), Line(2, 3), Line(3, 4)),
-    #          Path(Line(10, 11))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # Discontinuous closed example
-    #     q = Path(Line(1, 2), Line(2, 3), Line(3, 4), Line(4, 1),
-    #              Line(10, 11), Line(11, 12))
-    #     a = [Path(Line(1, 2), Line(2, 3), Line(3, 4), Line(4, 1)),
-    #          Path(Line(10, 11), Line(11, 12))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # Discontinuous example
-    #     q = Path(Line(1, 2),
-    #              Line(1, 2), Line(2, 3),
-    #              Line(10, 11), Line(11, 12), Line(12, 13),
-    #              Line(10, 11), Line(11, 12), Line(12, 13), Line(13, 14))
-    #     a = [Path(Line(1, 2)),
-    #          Path(Line(1, 2), Line(2, 3)),
-    #          Path(Line(10, 11), Line(11, 12), Line(12, 13)),
-    #          Path(Line(10, 11), Line(11, 12), Line(12, 13), Line(13, 14))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
-    #     # Discontinuous example with overlapping end
-    #     q = Path(Line(1, 2),
-    #              Line(5, 6), Line(6, 7),
-    #              Line(10, 11), Line(11, 12), Line(12, 13),
-    #              Line(10, 11), Line(11, 12), Line(12, 13), Line(13, 1))
-    #     a = [Path(Line(1, 2)),
-    #          Path(Line(5, 6), Line(6, 7)),
-    #          Path(Line(10, 11), Line(11, 12), Line(12, 13)),
-    #          Path(Line(10, 11), Line(11, 12), Line(12, 13), Line(13, 1))]
-    #     subpaths = q.continuous_subpaths()
-    #     chk1 = all(subpath.iscontinuous() for subpath in subpaths)
-    #     chk2 = (q == Path(*[seg for subpath in subpaths for seg in subpath]))
-    #     self.assertTrue(subpaths == a)
-    #     self.assertTrue(chk1)
-    #     self.assertTrue(chk2)
-
     def test_cropped(self):
         p_closed = Subpath(Line(0, 1), Line(1, 1 + 1j), Line(1 + 1j, 1j),
                            Line(1j, 0)).set_Z().path_of()
@@ -752,7 +625,11 @@ class TestPath(unittest.TestCase):
         cub2 = CubicBezier(700 + 300j, 800 + 400j, 750 + 200j, 600 + 100j)
         quad3 = QuadraticBezier(600 + 100j, 600, 600 + 300j)
         linez = Line(600 + 300j, 600 + 350j)
+        line2 = Line(100j, 0)
+        line3 = Line(0, 100)
 
+        lilimine = Subpath(line2, line3)
+        carrot = Subpath(cub1, cub2, quad3)
         bezpath = Path(line1, cub1, cub2, quad3)
         bezpathz = Path(line1, cub1, cub2, quad3, linez)
         path = Path(line1, arc1, cub2, quad3)
@@ -762,8 +639,10 @@ class TestPath(unittest.TestCase):
         cpath = Path(cub1)
         apath = Path(arc1, arc2)
 
-        test_curves = [bezpath, bezpathz, path, pathz, lpath, qpath, cpath,
-                       apath, line1, arc1, arc2, cub1, cub2, quad3, linez]
+        test_curves = [
+            lilimine, carrot, bezpath, bezpathz, path, pathz, lpath,
+            apath, line1, arc1, arc2, quad3, cub1, cub2, linez, qpath, cpath
+        ]
 
         def scale_a_point(pt, sx, sy=None, origin=0j):
             if sy is None:
@@ -791,80 +670,79 @@ class TestPath(unittest.TestCase):
             origin = (10  * (np.random.rand() - 0.5) +
                       10j * (np.random.rand() - 0.5))
 
-            # Note: `sx != sy` cases are not implemented for `Arc` objects
-            has_arc = curve.is_or_has_arc()
-
             # find seg which t lands on for failure reporting
             address = param2address(curve, t)
             if isinstance(curve, Path):
                 assert address.subpath_index is not None
             seg = curve.segment_at_address(address)
-            _fail_msg = "Failure!\nseg  {}\n".format(seg)
+            _fail_msg = "\nFailure!\non segment  {}\n".format(seg)
 
             # case where no `sy` and no `origin` given
             curve_scaled = curve.scaled(sx)
-            res = curve_scaled.point(address)
+            res = curve_scaled.point(t)
             ans = scale_a_point(pt, sx, None)
             fail_msg = _fail_msg + ("curve.scaled({}, {}, {}) = \n{}\n"
                                     "".format(sx, None, None, curve_scaled))
-            fail_msg += "seg_scaled.point({}) = {}\n".format(address.t, res)
+            fail_msg += "seg_scaled.point({}) = {}\n".format(t, res)
             fail_msg += "ans = {}".format(ans)
             self.assertAlmostEqual(ans, res, places=4, msg=fail_msg)
 
             # case where random `origin` given but no `sy`
             ans = scale_a_point(pt, sx, None, origin)
             curve_scaled = curve.scaled(sx, origin=origin)
-            res = curve_scaled.point(address)
+            res = curve_scaled.point(t)
             fail_msg = _fail_msg + ("curve.scaled({}, {}, {}) = \n{}\n"
                                     "".format(sx, None, origin, curve_scaled))
-            fail_msg += "seg_scaled.point({}) = {}\n".format(address.t, res)
+            fail_msg += "seg_scaled.point({}) = {}\n".format(t, res)
             fail_msg += "ans = {}".format(ans)
             self.assertAlmostEqual(ans, res, places=4, msg=fail_msg)
 
+            # the following tests don't in general hold for curves with
+            # > 1 segments
+            if curve.num_segments() > 0:
+                continue
+
             # case where `sx != sy`, and no `origin` given
             ans = scale_a_point(pt, sx, sy)
-            if has_arc:  # the cases with sx != sy are not yet imp for arcs
-                with self.assertRaises(Exception):
-                    curve.scaled(sx, sy).point(t)
-            else:
-                curve_scaled = curve.scaled(sx, sy)
-                res = curve_scaled.point(address)
-                fail_msg = _fail_msg + ("curve.scaled({}, {}, {}) = \n{}\n"
-                                        "".format(sx, sy, None, curve_scaled))
-                fail_msg += "seg_scaled.point({}) = {}\n".format(address.t, res)
-                fail_msg += "ans = {}".format(ans)
-                self.assertAlmostEqual(ans, res, places=4, msg=fail_msg)
+            curve_scaled = curve.scaled(sx, sy)
+            res = curve_scaled.point(t)
+            fail_msg = _fail_msg + ("curve.scaled({}, {}) = \n{}\n"
+                                    "".format(sx, sy, curve_scaled))
+            fail_msg += "seg_scaled.point({}) = {}\n".format(t, res)
+            fail_msg += "ans = {}\n".format(ans)
+            fail_msg += "pt = {}\n".format(pt)
+            fail_msg += "curve._lengths: {}\n".format(curve._lengths)
+            fail_msg += "scaled_curve._lengths: {}".format(curve_scaled._lengths)
+            self.assertAlmostEqual(ans, res, places=4, msg=fail_msg)
 
             # case where `sx != sy`, and random `origin` given
             ans = scale_a_point(pt, sx, sy, origin)
-            if has_arc:  # the cases with sx != sy are not yet imp for arcs
-                with self.assertRaises(Exception):
-                    curve.scaled(sx, sy, origin).point(t)
-            else:
-                curve_scaled = curve.scaled(sx, sy, origin)
-                res = curve_scaled.point(address)
-                fail_msg = _fail_msg + ("curve.scaled({}, {}, {}) = \n{}\n"
-                                        "".format(sx, sy, origin, curve_scaled))
-                fail_msg += "seg_scaled.point({}) = {}\n".format(address.t, res)
-                fail_msg += "ans = {}".format(ans)
-                self.assertAlmostEqual(ans, res, places=4, msg=fail_msg)
+            curve_scaled = curve.scaled(sx, sy, origin)
+            res = curve_scaled.point(t)
+            fail_msg = _fail_msg + ("curve.scaled({}, {}, {}) = \n{}\n"
+                                    "".format(sx, sy, origin, curve_scaled))
+            fail_msg += "seg_scaled.point({}) = {}\n".format(t, res)
+            fail_msg += "ans = {}".format(ans)
+            self.assertAlmostEqual(ans, res, places=4, msg=fail_msg)
 
         # more tests for scalar (i.e. `sx == sy`) case
         for curve in test_curves:
             # scale by 2 around (100, 100)
-            scaled_curve = curve.scaled(2.0, origin=complex(100, 100))
+            o = 0
+            scaled_curve = curve.scaled(2.0, origin=o)
 
             # expected length
             len_orig = curve.length()
             len_trns = scaled_curve.length()
+
             self.assertAlmostEqual(len_orig * 2.0, len_trns)
 
             # expected positions
             for T in np.linspace(0.0, 1.0, num=100):
                 pt_orig = curve.point(T)
                 pt_trns = scaled_curve.point(T)
-                pt_xpct = (pt_orig - complex(100, 100)) * 2.0 + complex(100, 100)
-                self.assertAlmostEqual(pt_xpct, pt_trns)
+                pt_xpct = (pt_orig - o) * 2.0 + o
+                self.assertAlmostEqual(pt_xpct, pt_trns, delta=0.00001)
 
             # scale by 0.3 around (0, -100)
             # the 'almost equal' test fails at the 7th decimal place for
@@ -1180,7 +1058,8 @@ class Test_intersect(unittest.TestCase):
                 # incomplete implementation.
                 continue
             x = segdict[x]
-            y = x.rotated(90).translated(5)
+            o = x.center if isinstance(x, Arc) else x.point(0.5)
+            y = x.rotated(90, origin=o).translated(5)
             xiy = sorted(x.intersect(y, tol=1e-15), key=(lambda z: z[0].t))
             yix = sorted(y.intersect(x, tol=1e-15), key=(lambda z: z[1].t))
             for xy, yx in zip(xiy, yix):
@@ -1302,34 +1181,6 @@ class TestPathTools(unittest.TestCase):
                                  quadratic_bpoints)
         self.assertSequenceEqual(bpoints2bezier(line_bpoints).bpoints,
                                  line_bpoints)
-
-    # def test_line2pathd(self):
-    #     bpoints = (0+1.5j, 100+10j)
-    #     line = Line(*bpoints)
-
-    #     # from Line object
-    #     pathd = line.d()
-    #     path = parse_path(pathd)
-    #     self.assertTrue(path[0] == line)
-
-    #     # from list of bpoints
-    #     pathd = line2pathd(bpoints)
-    #     path = parse_path(pathd)
-    #     self.assertTrue(path[0] == line)
-    #
-    # def test_cubic2pathd(self):
-    #     bpoints = (0+1.5j, 100+10j, 150 - 155.3j, 0)
-    #     cubic = CubicBezier(*bpoints)
-    #
-    #     # from Line object
-    #     pathd = cubic2pathd(cubic)
-    #     path = parse_path(pathd)
-    #     self.assertTrue(path[0] == cubic)
-    #
-    #     # from list of bpoints
-    #     pathd = cubic2pathd(bpoints)
-    #     path = parse_path(pathd)
-    #     self.assertTrue(path[0] == cubic)
 
     def test_closest_point_in_path(self):
         # Note: currently the radiialrange method is not implemented for Arc

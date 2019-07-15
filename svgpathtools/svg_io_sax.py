@@ -223,17 +223,6 @@ def new_style(fill='none', **kw):
     return string
 
 
-def matrix2transform(matrix):
-    ans = 'matrix('
-    ans += matrix[0][0] + ' '
-    ans += matrix[1][0] + ' '
-    ans += matrix[0][1] + ' '
-    ans += matrix[1][1] + ' '
-    ans += matrix[0][2] + ' '
-    ans += matrix[1][2] + ')'
-    return ans
-
-
 unique_id_counter = 1
 
 
@@ -459,27 +448,22 @@ class TextAndAttributes(GlorifiedDictionary):
 
 class PathAndAttributes(GlorifiedDictionary):
     """
-    This class is a just a glorified dictionary. Besides accommodating
-    SVG path attributes such as 'stroke', 'fill', etc, it has a few
-    special powers:
+    Main element class for storing paths. Attributes: stroke, width
+    (for stroke-width), fill, classname (for class) etc.
 
-    --- automically harmonized 'd' and 'object' fields, where the
-        former stores the path's d-string and the latter stores the
-        associated Path object
-    --- maps the 'width' key to 'stroke-width' and 'classname' to 'class'
-    --- has a 'flatten' method, that incorporates either the transform
-        into the path, and removes the transform attribute.
-    --- access the d-string in a particular format using the notation
+    It also has 'd' and 'object' fields. The former stores the string
+    for the path, the latter the object representation. These two
+    fields are kept consistent automatically. (Internally, the
+    representation has no redundancy.)
 
-        path_aa.get('d', **formatting_keywords)
+    Has a 'flatten' method.
 
-        as in, e.g.,
+    Access the d-string in a particular format using the 'get' method
+    and keyword options, as in:
 
-        path_aa.get('d', spacing_after_command='',
-                      spacing_within_coordinate=' ',
-                      use_V_and_H=False)
+        path_a_a.get('d', use_V_and_H=False, spacing_after_command='')
 
-        Or:
+    Or like this:
 
         path_aa.get(
             'd',
@@ -925,8 +909,12 @@ class SaxDocument(MutableSequence):
             raise ValueError("cannot set viewBox on empty elements list")
 
         for elem in self.elements:
+            if isinstance(elem, DotAndAttributes):
+                elem = elem.convert_to_PathAndAttributes()
+
             if not isinstance(elem, PathAndAttributes):
                 continue
+
             path = None
 
             if with_strokes:
@@ -935,7 +923,6 @@ class SaxDocument(MutableSequence):
                 if width is not None:
                     path = elem.object.stroke(width)
                     if transform is not None:
-                        # matrix = parse_transform(transform)
                         path = path.transformed(transform)
 
             if path is None:
@@ -948,8 +935,6 @@ class SaxDocument(MutableSequence):
             ymax = max(ya, ymax)
 
         assert all(abs(x) != np.inf for x in [xmin, xmax, ymin, ymax])
-
-        print("found:", xmin, xmax, ymin, ymax)
 
         if isinstance(absolute_margins, Number):
             absolute_margins = [absolute_margins]

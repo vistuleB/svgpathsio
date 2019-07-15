@@ -4,6 +4,7 @@ Note: This file was taken (nearly) as is from the svg.path module (v 2.0)."""
 
 # External dependencies
 from __future__ import division, absolute_import, print_function
+from numbers import Complex, Real
 import re
 
 # Internal dependencies
@@ -13,26 +14,90 @@ from .path import Path, Subpath, Line, QuadraticBezier, CubicBezier, Arc
 COMMANDS = set('MmZzLlHhVvCcSsQqTtAa')
 UPPERCASE = set('MZLHVCSQTA')
 
-COMMAND_RE = re.compile("([MmZzLlHhVvCcSsQqTtAa])")
-FLOAT_RE = re.compile("[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?")
+COMMAND_RE = re.compile(r"([MmZzLlHhVvCcSsQqTtAa])")
+FLOAT_RE = re.compile(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?")
 
 
-def _tokenize_path(pathdef):
+def _tokenize_path_string(pathdef):
     for x in COMMAND_RE.split(pathdef):
         if x in COMMANDS:
             yield x
+
         for token in FLOAT_RE.findall(x):
+            yield float(token)
+
+
+def _unpack_tokens(pathdef):
+    for token in pathdef:
+        if isinstance(token, str):
+            if token not in COMMANDS:
+                raise ValueError("unrecognized string token in svgpathtools.parser._unpack_tokens")
             yield token
 
+        elif isinstance(token, Real):
+            yield float(token)
 
-# The following function returns a Subpath when it can, else a Path:
+        elif isinstance(token, Complex):
+            yield float(token.real)
+            yield float(token.imag)
 
-def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
+        else:
+            try:
+                try:
+                    x = float(token.x)
+                    y = float(token.y)
+                    yield x
+                    yield y
+                except AttributeError:
+                    raise ValueError
+            except ValueError:
+                try:
+                    try:
+                        try:
+                            x = float(token['x'])
+                            y = float(token['y'])
+                            yield x
+                            yield y
+                        except TypeError:
+                            raise ValueError
+                    except KeyError:
+                        raise ValueError
+                except ValueError:
+                    raise ValueError("unrecognized token in svgpathtools.parser._unpack_tokens")
+
+
+# The following function returns a Subpath when it can, and otherwise, if
+# accept_paths is True, a Path. Does not accept an empty token list / spec.
+def parse_subpath(*args, accept_paths=False):
     # In the SVG specs, initial movetos are absolute, even if
     # specified as 'm'. This is the default behavior here as well.
     # But if you pass in a current_pos variable, the initial moveto
     # will be relative to that current_pos. This is useful.
-    elements = list(_tokenize_path(pathdef))
+    if len(args) == 0:
+        raise ValueError("empty args in parse_subpath")
+
+    if len(args) == 1 and isinstance(args[0], str):
+        elements = list(_tokenize_path_string(args[0]))
+
+    elif len(args) == 1 and isinstance(args[0], list):
+        elements = list(_unpack_tokens(args[0]))
+
+    else:
+        elements = list(_unpack_tokens(args))
+
+    if not all(isinstance(x, str) or isinstance(x, float) for x in elements):
+        print("args:")
+        print(args)
+        print("elements:")
+        print(elements)
+        assert False
+
+    if len(elements) == 0:
+        raise ValueError("Empty token list in parse_subpath.")
+
+    if isinstance(elements[0], float):
+        elements.insert(0, 'M')
+
     # Reverse for easy use of .pop()
     elements.reverse()
 
@@ -40,37 +105,46 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
     subpath = Subpath()
     subpath_start = None
     command = None
+    current_pos = 0  # if path starts with an 'm'...
 
     def append_to_path(subpath):
         if len(path) > 0 and not accept_paths:
             raise ValueError("parse_subpath given multi-subpath path")
         path.append(subpath)
 
-    while elements:
+    def pop_float():
+        nonlocal elements
+        el = elements.pop()
+        if isinstance(el, str):
+            raise ValueError("string found in tokens when float expected")
+        assert isinstance(el, float)
+        return el
 
+    while elements:
         if elements[-1] in COMMANDS:
             # New command.
             last_command = command  # Used by S and T
             command = elements.pop()
             absolute = command in UPPERCASE
             command = command.upper()
+
         else:
             # If this element starts with numbers, it is an implicit command
             # and we don't change the command. Check that it's allowed:
             if command is None:
-                raise ValueError("Missing command in %s, position %s" % (
-                    pathdef, len(pathdef.split()) - len(elements)))
+                raise ValueError("Missing command after 'Z' in parse_subpath.")
 
         if command == 'M':
             # Moveto command.
             if len(subpath) > 0:
                 append_to_path(subpath)
                 subpath = Subpath()
-            x = elements.pop()
-            y = elements.pop()
-            pos = float(x) + float(y) * 1j
+            x = pop_float()
+            y = pop_float()
+            pos = x + y * 1j
             if absolute:
                 current_pos = pos
+
             else:
                 current_pos += pos
 
@@ -96,34 +170,34 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
             command = None
 
         elif command == 'L':
-            x = elements.pop()
-            y = elements.pop()
-            pos = float(x) + float(y) * 1j
+            x = pop_float()
+            y = pop_float()
+            pos = x + y * 1j
             if not absolute:
                 pos += current_pos
             subpath.append(Line(current_pos, pos))
             current_pos = pos
 
         elif command == 'H':
-            x = elements.pop()
-            pos = float(x) + current_pos.imag * 1j
+            x = pop_float()
+            pos = x + current_pos.imag * 1j
             if not absolute:
                 pos += current_pos.real
             subpath.append(Line(current_pos, pos))
             current_pos = pos
 
         elif command == 'V':
-            y = elements.pop()
-            pos = current_pos.real + float(y) * 1j
+            y = pop_float()
+            pos = current_pos.real + y * 1j
             if not absolute:
                 pos += current_pos.imag * 1j
             subpath.append(Line(current_pos, pos))
             current_pos = pos
 
         elif command == 'C':
-            control1 = float(elements.pop()) + float(elements.pop()) * 1j
-            control2 = float(elements.pop()) + float(elements.pop()) * 1j
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            control1 = pop_float() + pop_float() * 1j
+            control2 = pop_float() + pop_float() * 1j
+            end = pop_float() + pop_float() * 1j
 
             if not absolute:
                 control1 += current_pos
@@ -142,14 +216,15 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
                 # was not an C, c, S or s, assume the first control point is
                 # coincident with the current point.
                 control1 = current_pos
+
             else:
                 # The first control point is assumed to be the reflection of
                 # the second control point on the previous command relative
                 # to the current point.
                 control1 = current_pos + current_pos - subpath[-1].control2
 
-            control2 = float(elements.pop()) + float(elements.pop()) * 1j
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            control2 = pop_float() + pop_float() * 1j
+            end = pop_float() + pop_float() * 1j
 
             if not absolute:
                 control2 += current_pos
@@ -159,8 +234,8 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
             current_pos = end
 
         elif command == 'Q':
-            control = float(elements.pop()) + float(elements.pop()) * 1j
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            control = pop_float() + pop_float() * 1j
+            end = pop_float() + pop_float() * 1j
 
             if not absolute:
                 control += current_pos
@@ -184,7 +259,7 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
                 # to the current point.
                 control = current_pos + current_pos - subpath[-1].control
 
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            end = pop_float() + pop_float() * 1j
 
             if not absolute:
                 end += current_pos
@@ -193,11 +268,11 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
             current_pos = end
 
         elif command == 'A':
-            radius = float(elements.pop()) + float(elements.pop()) * 1j
-            rotation = float(elements.pop())
-            arc = float(elements.pop())
-            sweep = float(elements.pop())
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            radius = pop_float() + pop_float() * 1j
+            rotation = pop_float()
+            arc = pop_float()
+            sweep = pop_float()
+            end = pop_float() + pop_float() * 1j
 
             if not absolute:
                 end += current_pos
@@ -222,10 +297,27 @@ def parse_subpath(pathdef, current_pos=0j, accept_paths=False):
     return path
 
 
-def parse_path(pathdef, current_pos=0j, tree_element=None):
-    s = parse_subpath(pathdef, current_pos, accept_paths=True)
+def parse_path(*args, accept_paths=None):
+    """
+    Parses a path from a single string or from a list of tokens. The 'accept_paths'
+    option is accepted here for uniformity with 'parse_subpath', but it has no
+    effect in this function.
+
+    All of the following are valid usages, and will parse to the same path:
+
+    parse_path("M 0 0 10 10")
+    parse_path(['M', 0, 0, 10, 10])
+    parse_path('M', 0, 0, 10, 10)
+    parse_path("M 0+0j 10+10j")
+    parse_path(['M', 0+0j, 10+10j])
+    parse_path('M', 0+0j, 10+10j)
+    parse_path('M', 0, 0, 10+10j)
+
+    (Etc.)
+    """
+    s = parse_subpath(*args, accept_paths=True)
+
     if isinstance(s, Subpath):
         s = Path(s)
-    if tree_element is not None:
-        s._tree_element = tree_element
+
     return s

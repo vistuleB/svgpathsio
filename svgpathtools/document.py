@@ -185,13 +185,13 @@ class Document:
     def __init__(self, filename):
         """A container for a DOM-style SVG document.
 
-        The `Document` class provides a simple interface to modify and analyze 
-        the path elements in a DOM-style document.  The DOM-style document is 
+        The `Document` class provides a simple interface to modify and analyze
+        the path elements in a DOM-style document.  The DOM-style document is
         parsed into an ElementTree object (stored in the `tree` attribute).
 
         This class provides functions for extracting SVG data into Path objects.
         The Path output objects will be transformed based on their parent groups.
-        
+
         Args:
             filename (str): The filename of the DOM-style object.
         """
@@ -259,12 +259,15 @@ class Document:
         # TODO: It might be better to use duck-typing here with a try-except
         if isinstance(path, Path):
             path_svg = path.d()
+
         elif isinstance(path, Segment):
             path_svg = Path(path).d()
+
         elif isinstance(path, str):
             # Assume this is a valid d-string.
             # TODO: Should we sanity check the input string?
             path_svg = path
+
         else:
             raise TypeError(
                 'Must provide a Path, a path segment type, or a valid '
@@ -283,7 +286,8 @@ class Document:
         return any(group is owned for owned in self.tree.iter())
 
     def get_or_add_group(self, nested_names, name_attr='id'):
-        """Get a group from the tree, or add a new one with the given
+        """
+        Get a group from the tree, or add a new one with the given
         name structure.
 
         `nested_names` is a list of strings which represent group names.
@@ -297,7 +301,6 @@ class Document:
         exist, this function will create it, as well as all parent
         groups that it requires. All created groups will be left with
         blank attributes.
-
         """
         group = self.tree.getroot()
         # Drill down through the names until we find the desired group

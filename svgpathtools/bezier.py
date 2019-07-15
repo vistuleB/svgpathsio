@@ -1,4 +1,4 @@
-"""This submodule contains tools that deal with generic, degree n, Bezier
+"""This submodule contains tools that deal with generic, degree n, Bez
 curves.
 Note:  Bezier curves here are always represented by the tuple of their control
 points given by their standard representation."""
@@ -6,8 +6,6 @@ points given by their standard representation."""
 # External dependencies:
 from __future__ import division, absolute_import, print_function
 from math import factorial as fac, ceil, log, sqrt
-# from numpy import poly1d
-import numpy as np
 from numpy import poly1d
 
 # Internal dependencies
@@ -33,14 +31,6 @@ def bezier_point(p, t):
     Note: Uses Horner's rule for cubic and lower order Bezier curves.
     Warning:  Be concerned about numerical stability when using this function
     with high order curves."""
-
-    # begin arc support block ########################
-    try:
-        p.large_arc
-        return p.point(t)
-    except AttributeError:
-        pass
-    # end arc support block ##########################
 
     deg = len(p) - 1
     if deg == 3:
@@ -152,16 +142,6 @@ def split_bezier(bpoints, t):
 
 
 def halve_bezier(p):
-
-    # begin arc support block ########################
-    try:
-        p.large_arc
-        return p.split(0.5)
-
-    except AttributeError:
-        pass
-    # end arc support block ##########################
-
     if len(p) == 4:
         return ([p[0], (p[0] + p[1]) / 2, (p[0] + 2 * p[1] + p[2]) / 4,
                  (p[0] + 3 * p[1] + 3 * p[2] + p[3]) / 8],
@@ -173,11 +153,13 @@ def halve_bezier(p):
 
 # Bounding Boxes ##############################################################
 
-def bezier_real_minmax(p):
-    """returns the minimum and maximum for any real cubic bezier"""
+def bezier_real_minmax(a):
+    """
+    Returns the minimum and maximum for any bezier.
+    """
     local_extremizers = [0, 1]
-    if len(p) == 4:  # cubic case
-        a = [p.real for p in p]
+
+    if len(a) == 4:  # cubic case (? is it solving a cubic ? no idea)
         denom = a[0] - 3 * a[1] + 3 * a[2] - a[3]
         if denom != 0:
             delta = a[1]**2 - (a[0] + a[1]) * a[2] + a[2]**2 + (a[0] - a[1]) * a[3]
@@ -193,44 +175,39 @@ def bezier_real_minmax(p):
             local_extrema = [bezier_point(a, t) for t in local_extremizers]
             return min(local_extrema), max(local_extrema)
 
-    # find reverse standard coefficients of the derivative
-    dcoeffs = bezier2polynomial(a, return_poly1d=True).deriv().coeffs
-
-    # find real roots, r, such that 0 <= r <= 1
-    local_extremizers += polyroots01(dcoeffs)
-    local_extrema = [bezier_point(a, t) for t in local_extremizers]
+    poly = bezier2polynomial(a, return_poly1d=True)
+    local_extremizers += polyroots01(poly.deriv())
+    local_extrema = [poly(t) for t in local_extremizers]
     return min(local_extrema), max(local_extrema)
 
 
-def bezier_bounding_box(bez):
+def bezier_xbox(bez):
+    """
+    Returns xmin, xmax of bezier segment.
+
+    Warning: For the non-cubic case this is not particularly efficient.
+    """
+    return bezier_real_minmax([p.real for p in bez])
+
+
+def bezier_ybox(bez):
+    """
+    Returns ymin, ymax of bezier segment.
+
+    Warning: For the non-cubic case this is not particularly efficient.
+    """
+    return bezier_real_minmax([p.imag for p in bez])
+
+
+def bezier_bbox(bez):
     """returns the bounding box for the segment in the form
     (xmin, xmax, ymin, ymax).
     Warning: For the non-cubic case this is not particularly efficient."""
 
-    # begin arc support block ########################
-    try:
-        bez.large_arc
-        return bez.bbox()  # added to support Arc objects
-    except AttributeError:
-        pass
-    # end arc support block ##########################
+    xmin, xmax = bezier_xbox(bez)
+    ymin, ymax = bezier_ybox(bez)
 
-    if len(bez) == 4:
-        xmin, xmax = bezier_real_minmax([p.real for p in bez])
-        ymin, ymax = bezier_real_minmax([p.imag for p in bez])
-        return xmin, xmax, ymin, ymax
-    poly = bezier2polynomial(bez, return_poly1d=True)
-    x = real(poly)
-    y = imag(poly)
-    dx = x.deriv()
-    dy = y.deriv()
-    x_extremizers = [0, 1] + polyroots(dx, realroots=True,
-                                       condition=lambda r: 0 < r < 1)
-    y_extremizers = [0, 1] + polyroots(dy, realroots=True,
-                                       condition=lambda r: 0 < r < 1)
-    x_extrema = [x(t) for t in x_extremizers]
-    y_extrema = [y(t) for t in y_extremizers]
-    return min(x_extrema), max(x_extrema), min(y_extrema), max(y_extrema)
+    return xmin, xmax, ymin, ymax
 
 
 def box_area(xmin, xmax, ymin, ymax):
@@ -287,55 +264,10 @@ class BPair(object):
         self.t2 = t2  # t value to get the mid point of this curve from cub2
 
 
-def complex_linear_congruence(a, z, b, w):
-    # solves a + l * z = b + m * w for real l, m
-
-    # first way, using np.matrix:
-    M = np.matrix(
-        [[real(z), -real(w)],
-         [imag(z), -imag(w)]])
-    try:
-        lm_matrix = M.I * np.matrix([[real(b - a)], [imag(b - a)]])
-    except np.linalg.LinAlgError:
-        raise ValueError
-
-    # second way, using np.ndarray:
-    Q = np.array(
-        [[real(z), -real(w)],
-         [imag(z), -imag(w)]])
-    try:
-        inv = np.linalg.inv(Q)
-        lm_array = inv @ np.array([[real(b - a)], [imag(b - a)]])
-    except np.linalg.LinAlgError:
-        raise ValueError
-
-    assert np.isclose(lm_matrix.item(0, 0), lm_array.item(0, 0))
-    assert np.isclose(lm_matrix.item(1, 0), lm_array.item(1, 0))
-
-    return lm_array.item(0, 0), lm_array.item(1, 0)
-
-
-def line_by_line_intersections(l1, l2):
-    """returns values a list that is either empty or else contains a single
-    pair (t1, t2) such that l1.point(t1) ~= l2.point(t2)"""
-    assert len(l1) == 2
-    assert len(l2) == 2
-    a = l1[0]
-    z = l1[1] - l1[0]
-    b = l2[0]
-    w = l2[1] - l2[0]
-    try:
-        t1, t2 = complex_linear_congruence(a, z, b, w)
-        if 0 <= t1 <= 1 and 0 <= t2 <= 1:
-            assert np.isclose(l1.point(t1), l2.point(t2))
-            return [(t1, t2)]
-        return []
-    except ValueError:
-        raise
-
-
 def bezier_by_line_intersections(bezier, line):
-    """Returns tuples (t1,t2) such that bezier.point(t1) ~= line.point(t2)."""
+    """
+    Returns tuples (t1,t2) such that bezier.point(t1) ~= line.point(t2).
+    """
     # The method here is to translate (shift) then rotate the complex plane so
     # that line starts at the origin and proceeds along the positive real axis.
     # After this transformation, the intersection points are the real roots of
@@ -394,8 +326,8 @@ def bezier_intersections(bez1, bez2, longer_length, tol=1e-6, tol_deC=1e-8):
         new_pairs = []
         delta = 0.5**(k + 2)
         for pair in pair_list:
-            bbox1 = bezier_bounding_box(pair.bez1)
-            bbox2 = bezier_bounding_box(pair.bez2)
+            bbox1 = bezier_bbox(pair.bez1)
+            bbox2 = bezier_bbox(pair.bez2)
             if boxes_intersect(bbox1, bbox2):
                 if box_area(*bbox1) < tol_deC and box_area(*bbox2) < tol_deC:
                     point = bezier_point(bez1, pair.t1)

@@ -79,8 +79,7 @@ class TestGroups(unittest.TestCase):
                                               [0, 1, 0],
                                               [0, 0, 1]])
 
-        self.check_line(tf_matrix_group.dot(tf_scale_group
-                                      ).dot(tf_nested_translate_group),
+        self.check_line(tf_matrix_group.dot(tf_scale_group).dot(tf_nested_translate_group),
                         [150, 200], [-50, 25],
                         'path04', result)
 
@@ -88,8 +87,7 @@ class TestGroups(unittest.TestCase):
                                                  [0, 1, 30],
                                                  [0, 0, 1]])
 
-        self.check_line(tf_matrix_group.dot(tf_scale_group
-                                      ).dot(tf_nested_translate_xy_group),
+        self.check_line(tf_matrix_group.dot(tf_scale_group).dot(tf_nested_translate_xy_group),
                         [150, 200], [-50, 25],
                         'path05', result)
 
@@ -101,16 +99,16 @@ class TestGroups(unittest.TestCase):
                         [122, 320], [-50, 0],
                         'path06', result)
 
-        a_07 = 20.0*np.pi/180.0
+        a_07 = 20.0 * np.pi / 180.0
         tf_rotate_group = np.array([[np.cos(a_07), -np.sin(a_07), 0],
-                                     [np.sin(a_07),  np.cos(a_07), 0],
-                                     [0, 0, 1]])
+                                    [np.sin(a_07),  np.cos(a_07), 0],
+                                    [0, 0, 1]])
 
         self.check_line(tf_matrix_group.dot(tf_rotate_group),
                         [183, 183], [0, 30],
                         'path07', result)
 
-        a_08 = 45.0*np.pi/180.0
+        a_08 = 45.0 * np.pi / 180.0
         tf_rotate_xy_group_R = np.array([[np.cos(a_08), -np.sin(a_08), 0],
                                          [np.sin(a_08),  np.cos(a_08), 0],
                                          [0, 0, 1]])
@@ -125,7 +123,7 @@ class TestGroups(unittest.TestCase):
                         [183, 183], [0, 30],
                         'path08', result)
 
-        a_09 = 5.0*np.pi/180.0
+        a_09 = 5.0 * np.pi / 180.0
         tf_skew_x_group = np.array([[1, np.tan(a_09), 0],
                                     [0, 1, 0],
                                     [0, 0, 1]])
@@ -134,7 +132,7 @@ class TestGroups(unittest.TestCase):
                         [183, 183], [40, 40],
                         'path09', result)
 
-        a_10 = 5.0*np.pi/180.0
+        a_10 = 5.0 * np.pi / 180.0
         tf_skew_y_group = np.array([[1, 0, 0],
                                     [np.tan(a_10), 1, 0],
                                     [0, 0, 1]])
@@ -145,10 +143,10 @@ class TestGroups(unittest.TestCase):
 
         # This last test is for handling transforms that are defined as
         # attributes of a <path> element.
-        a_11 = -40*np.pi/180.0
+        a_11 = -40 * np.pi / 180.0
         tf_path11_R = np.array([[np.cos(a_11), -np.sin(a_11), 0],
-                                 [np.sin(a_11),  np.cos(a_11), 0],
-                                 [0, 0, 1]])
+                                [np.sin(a_11),  np.cos(a_11), 0],
+                                [0, 0, 1]])
         tf_path11_T = np.array([[1, 0, 100],
                                 [0, 1, 100],
                                 [0, 0, 1]])
@@ -212,10 +210,9 @@ class TestGroups(unittest.TestCase):
             'base_group', 'new_parent', 'new_child', 'new_leaf']))
         self.check_group_count(doc, 7)
 
-        path_d = ('M 206.07112,858.41289 L 206.07112,-2.02031 '
+        path_d = ('M 206.07112,858.41289 V -2.02031 '
                   'C -50.738,-81.14814 -20.36402,-105.87055 52.52793,-101.01525 '
-                  'L 103.03556,0 '
-                  'L 0,111.11678')
+                  'L 103.03556,0 0,111.11678')
 
         svg_path = doc.add_path(path_d, group=new_leaf)
         self.assertEqual(path_d, svg_path.get('d'))
