@@ -18,6 +18,9 @@ additional features:
 - supports `<defs>` and `<use>`
 - supports `<text>` and `<textPath>`
 
+Note: About 40% of the following README is taken from the original
+mathandy/svgpathtools.
+
 Features
 --------
 
