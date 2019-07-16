@@ -5,7 +5,8 @@ This is a fork of mathandy/svgpathtools,
 a collection of tools for manipulating and analyzing SVG
 Path objects and Bézier curves.
 
-This fork adds support for subpaths, stroke, offsets, addresses, path
+This is an advanced fork that adds support for subpaths, stroke, 
+offsets, addresses, path
 cropping, as well as path union and intersections. A number of bugs
 have been removed, as well as some legacy elements of the API that had 
 been kept around for backward-compatibility with older versions of the
@@ -19,7 +20,7 @@ additional features:
 - supports `<text>` and `<textPath>`
 
 Note: About 40% of the following README is taken from the original
-mathandy/svgpathtools.
+mathandy/svgpathtools README.
 
 Features
 --------
