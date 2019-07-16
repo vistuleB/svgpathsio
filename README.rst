@@ -75,7 +75,7 @@ And, in this fork:
 -  support for SVG's <defs> and <use>
 -  compute the bounding box of a group of PathAndAttribute objects 
    while taking stroke widths into consideration
--  automatically compute the **viewbox** of a document from its
+-  automatically compute the viewbox of a document from its
    path contents (warning: as of this writing, text elements are not taken into account)
 
 Prerequisites
