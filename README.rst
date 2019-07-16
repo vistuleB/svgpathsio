@@ -59,9 +59,12 @@ Some of the original capabilities of mathandy/svgpathtools:
 And, in this fork:
 
 -  enjoy support for paths made up of **multiple subpaths**
+-  **crop** paths to the inside/outside of a given window, or to 
+   the inside/outside of an arbitrary path, more generally
 -  generate **path offsets**
 -  generate **path strokes** using any combination of the standard
    SVG options for 'cap' and 'join'
+-  compute **path unions**
 -  **convert elliptical arc segments** to bezier-based subpaths, to
    desired accuracy
 -  enjoy the support of **Address objects**
@@ -73,9 +76,6 @@ And, in this fork:
    while taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
    path contents (warning: as of this writing, text elements are not taken into account
--  compute **path unions**
--  **crop** paths to the inside/outside of a given window, or to 
-   the inside/outside of an arbitrary path
 
 Prerequisites
 -------------
