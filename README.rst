@@ -58,7 +58,7 @@ Some of the original capabilities of mathandy/svgpathtools:
    
 And, in this fork:
 
--  (properly) work with paths made up of **multiple subpaths**
+-  enjoy support for paths made up of **multiple subpaths**
 -  generate **path offsets**
 -  generate **path strokes** using any combination of the standard
    SVG options for 'cap' and 'join'
