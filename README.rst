@@ -58,9 +58,9 @@ Some of the original capabilities of mathandy/svgpathtools:
    
 And, in this fork:
 
--  enjoy support for paths made up of **multiple subpaths**
+-  complete support for paths made up of **multiple subpaths**
 -  **crop** paths to the inside/outside of a given window, or to 
-   the inside/outside of an arbitrary path, more generally
+   the inside/outside of an arbitrary path
 -  generate **path offsets**
 -  generate **path strokes** using any combination of the standard
    SVG options for 'cap' and 'join'
