@@ -64,7 +64,7 @@ And, in this fork:
    SVG options for 'cap' and 'join'
 -  **convert elliptical arc segments** to bezier-based subpaths, to
    desired accuracy
--  use **Address objects** as one-size-fits-all parameters, for extra convenience
+-  enjoy the support of **Address objects**
 -  style your paths, text and dots elements with **PathAndAttributes**,
    **TextAndAttributes** and **DotAndAttributes** classes
 -  use the **SaxDocument** class to easily keep track of definitions,
