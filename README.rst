@@ -74,8 +74,10 @@ And, in this fork:
 -  automatically compute the **viewbox** of a document from its
    path contents (warning: as of this writing, text elements are not taken into account)
 -  use **classes and css** to efficiently style your SaxDocument elements
--  enjoy **support for defs and <use>** elements in SaxDocument
--  compute **path area unions** and **path area intersections**
+-  use **<defs> and <use>** elements in SaxDocument
+-  compute **path unions**
+-  **crop** paths to the inside/outside of a given window, or to 
+   the inside/outside of an arbitrary path
 
 Prerequisites
 -------------
