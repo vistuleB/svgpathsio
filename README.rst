@@ -6,7 +6,8 @@ a collection of tools for manipulating and analyzing SVG
 Path objects and Bézier curves.
 
 This fork adds support for subpaths, stroke, offsets, addresses, path
-cropping, as well as path union and intersections.
+cropping, as well as path union and intersections. A number of bugs
+have been removed, and the API has been streamlined.
 
 The SaxDocument class included in this fork also has the following 
 additional features:
