@@ -1,5 +1,6 @@
-svgpathtools offset and stroke fork!
-====================================
+svgpathtools offset and stroke fork
+===================================
+===================================
 
 This is a (hopefully, temporary) fork of mathandy/svgpathtools, 
 a collection of tools for manipulating and analyzing SVG
