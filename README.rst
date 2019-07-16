@@ -67,7 +67,7 @@ And, in this fork:
 -  compute **path unions**
 -  **convert elliptical arc segments** to bezier-based subpaths, to
    desired accuracy
--  use of **Address objects** to specify positions in a foolproof and modular way
+-  use **Address objects** to specify positions of points on paths
 -  style your paths, text and dots elements with **PathAndAttributes**,
    **TextAndAttributes** and **DotAndAttributes** objects inside of a SaxDocument
 -  **use classes and css** to efficiently style your SaxDocument elements
