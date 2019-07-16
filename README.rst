@@ -58,10 +58,10 @@ Some of the original capabilities of mathandy/svgpathtools:
    
 And, in this fork:
 
+-  (properly) work with paths made up of **multiple subpaths**
 -  generate **path offsets**
 -  generate **path strokes** using any combination of the standard
    SVG options for 'cap' and 'join'
--  enjoy full support and a proper API for paths made up of **multiple subpaths**
 -  **convert elliptical arc segments** to bezier-based subpaths, to
    desired accuracy
 -  use **Address objects** as one-size-fits-all parameters, for extra convenience
