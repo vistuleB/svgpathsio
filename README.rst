@@ -58,8 +58,8 @@ Some of the original capabilities of mathandy/svgpathtools:
    
 And, in this fork:
 
--  work with a proper **class structure** to enable code reuse between
-   Segments, Subpaths and Paths, and for a cleaner API
+-  a refactored class structure that includes a `Segment`, `BezierSegment`
+   and `Subpath` classes as new types
 -  generate **strokes** and **offsets** of paths, using any of the standard
    SVG options for 'cap' and 'join'
 -  enjoy full support and a proper API for paths made up of **multiple subpaths** and manipulate **subpath closure** on a subpath-by-subpath basis
