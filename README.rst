@@ -70,7 +70,7 @@ And, in this fork:
 -  use the **SaxDocument** class to easily keep track of definitions,
    styles, as well as of the afore-mentioned dot, paths and text elements
 -  compute the **bounding box** of a group of PathAndAttribute objects 
-   while optionally taking stroke widths into consideration
+   while taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
    path contents (warning: as of this writing, text elements are not taken into account)
 -  use **classes and css** to efficiently style your SaxDocument elements
