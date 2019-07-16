@@ -5,9 +5,10 @@ This is a (hopefully, temporary) fork of mathandy/svgpathtools,
 a collection of tools for manipulating and analyzing SVG
 Path objects and Bézier curves.
 
-Mainly, this fork adds proper support for subpaths as well
-as stroke and offset utilities. Various other small details of the API
-have been improved.
+This fork adds support for subpaths, stroke, offsets, addresses, path
+cropping, as well as path union and intersections. The class structure
+of the API has been refactored. The capabilities of the SaxDocument
+class for document/attribute manipulation are also expanded.
 
 
 Features
