@@ -56,8 +56,7 @@ Some of the original capabilities of mathandy/svgpathtools:
 -  convenience functions, such the generation of hexadecimal color
    codes from RGB color tuples and back
    
-Some of the extra goodies included in this fork:
-
+And, in this fork:
 
 -  work with a proper **class structure** to enable code reuse between
    Segments, Subpaths and Paths, and for a cleaner API
