@@ -58,14 +58,13 @@ Some of the original capabilities of mathandy/svgpathtools:
    
 And, in this fork:
 
--  a refactored class structure that includes a `Segment`, `BezierSegment`
-   and `Subpath` classes as new types
--  generate **strokes** and **offsets** of paths, using any of the standard
+-  generate **path offsets**
+-  generate **path strokes** using any combination of the standard
    SVG options for 'cap' and 'join'
--  enjoy full support and a proper API for paths made up of **multiple subpaths** and manipulate **subpath closure** on a subpath-by-subpath basis
+-  enjoy full support and a proper API for paths made up of **multiple subpaths**
 -  **convert elliptical arc segments** to bezier-based subpaths, to
    desired accuracy
--  use **Address objects** as one-size-fits-all parameters
+-  use **Address objects** as one-size-fits-all parameters, for extra convenience
 -  style your paths, text and dots elements with **PathAndAttributes**,
    **TextAndAttributes** and **DotAndAttributes** classes
 -  use the **SaxDocument** class to easily keep track of definitions,
@@ -73,10 +72,10 @@ And, in this fork:
 -  compute the **bounding box** of a group of PathAndAttribute objects 
    while optionally taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
-   contents (warning: as of this writing, text elements are not taken into account)
--  use **classes and css styles** to style paths in your SaxDocument
--  enjoy more diverse **pretty-printing** options for Path objects
-
+   path contents (warning: as of this writing, text elements are not taken into account)
+-  use **classes and css** to efficiently style your SaxDocument elements
+-  enjoy **support for defs and <use>** elements in SaxDocument
+-  compute **path area unions** and **path area intersections**
 
 Prerequisites
 -------------
