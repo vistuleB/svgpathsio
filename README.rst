@@ -108,10 +108,10 @@ For example, an SVG path such as
 ``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z``  (1)
 
 would end up modeled as a ``Path`` containing two ``Subpath`` s each being a
-sequence of four ``Line`` objects. (Each 'Z' command results in an extra line
-segment being added to close off that subpath.) 
+sequence of four ``Line`` objects, as each 'Z' command results in an extra line
+segment being added to close off that subpath.
 
-SVG distinguishes between subpaths that are merely geometrically closed and
+Note that SVG distinguishes between subpaths that are merely geometrically closed and
 those that are closed via a ``Z`` command. For example, (1) renders as
 
 .. figure:: https://user-images.githubusercontent.com/19382247/54197407-ca6c7c00-44fe-11e9-9d59-c4f1d7834897.png
