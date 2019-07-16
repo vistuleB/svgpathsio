@@ -9,7 +9,7 @@ This is an advanced fork that adds support for subpaths, stroke,
 offsets, addresses, path
 cropping, as well as path union and intersections. A number of bugs
 and incompletenesses have been removed. Some legacy elements of 
-the API designed for backward-compatibility with older versions of the
+the API that maintained backward-compatibility with older versions of the
 library have also been removed, to give the library a fresh start.
 
 The SaxDocument class included in this fork also has the following 
