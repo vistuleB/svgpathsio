@@ -8,9 +8,10 @@ Path objects and Bézier curves.
 This is an advanced fork that adds support for subpaths, stroke, 
 offsets, addresses, path
 cropping, as well as path union and intersections. A number of bugs
-have been removed, as well as some legacy elements of the API that had 
-been kept around for backward-compatibility with older versions of the
-library.
+and incompletenesses have been removed. Some legacy elements of 
+the API that 
+previously kept for backward-compatibility with older versions of the
+library have also been removed, to give the library a fresh start.
 
 The SaxDocument class included in this fork also has the following 
 additional features:
