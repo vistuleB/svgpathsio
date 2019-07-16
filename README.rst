@@ -68,7 +68,7 @@ And, in this fork:
 -  style your paths, text and dots elements with **PathAndAttributes**,
    **TextAndAttributes** and **DotAndAttributes** classes
 -  use the **SaxDocument** class to easily keep track of definitions,
-   styles, as well as of the afore-mentioned dot, paths and text elements
+   styles, and elements in one place
 -  compute the **bounding box** of a group of PathAndAttribute objects 
    while taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
