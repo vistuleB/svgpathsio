@@ -1,7 +1,7 @@
 svgpathtools offset and stroke fork
 ===================================
 
-This is a (hopefully, temporary) fork of mathandy/svgpathtools, 
+This is a fork of mathandy/svgpathtools, 
 a collection of tools for manipulating and analyzing SVG
 Path objects and Bézier curves.
 
