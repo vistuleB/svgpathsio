@@ -33,7 +33,7 @@ elements**.
 Additionally, the submodule *bezier.py* contains tools for working
 with general **nth order Bezier curves stored as n-tuples**.
 
-Some of the tools inherited from the original mathandy/svgpathtools:
+Some of the tools already present in the original mathandy/svgpathtools:
 
 -  **read**, **write**, and **display** SVG files containing Path (and
    other) SVG elements
