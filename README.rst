@@ -69,9 +69,9 @@ And, in this fork:
    desired accuracy
 -  use of **Address objects** to specify positions in a foolproof and modular way
 -  style your paths, text and dots elements with **PathAndAttributes**,
-   **TextAndAttributes** and **DotAndAttributes** classes inside of a SaxDocument
+   **TextAndAttributes** and **DotAndAttributes** objects inside of a SaxDocument
 -  **use classes and css** to efficiently style your SaxDocument elements
--  **use <defs> and <use>** elements in SaxDocument
+-  support for **<defs>** and **<use>** in SaxDocument
 -  compute the **bounding box** of a group of PathAndAttribute objects 
    while taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
