@@ -67,14 +67,12 @@ And, in this fork:
 -  enjoy the support of **Address objects**
 -  style your paths, text and dots elements with **PathAndAttributes**,
    **TextAndAttributes** and **DotAndAttributes** classes
--  use the (expanded) **SaxDocument** class to easily read/write/display
-   and manipulate SVG documents
+-  use **classes and css** to efficiently style your SaxDocument elements
+-  use **<defs> and <use>** elements in SaxDocument
 -  compute the **bounding box** of a group of PathAndAttribute objects 
    while taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
-   path contents (warning: as of this writing, text elements are not taken into account)
--  use **classes and css** to efficiently style your SaxDocument elements
--  use **<defs> and <use>** elements in SaxDocument
+   path contents (warning: as of this writing, text elements are not taken into account
 -  compute **path unions**
 -  **crop** paths to the inside/outside of a given window, or to 
    the inside/outside of an arbitrary path
