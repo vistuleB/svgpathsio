@@ -67,8 +67,7 @@ And, in this fork:
 -  enjoy the support of **Address objects**
 -  style your paths, text and dots elements with **PathAndAttributes**,
    **TextAndAttributes** and **DotAndAttributes** classes
--  use the **SaxDocument** class to easily keep track of definitions,
-   styles, and elements in one place
+-  use the **SaxDocument** class to manipulate entire SVG documents
 -  compute the **bounding box** of a group of PathAndAttribute objects 
    while taking stroke widths into consideration
 -  automatically compute the **viewbox** of a document from its
