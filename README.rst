@@ -112,9 +112,30 @@ sequence of four ``Line`` objects, as each 'Z' command results in an extra line
 segment being added to close off that subpath.
 
 Note that SVG distinguishes between subpaths that are merely geometrically closed and
-those that are closed via ``Z``. For example, the above path renders as
+those that are closed via ``Z``. For example,
 
-.. figure:: https://user-images.githubusercontent.com/19382247/61361941-a12f7400-a881-11e9-91b2-6e077f9ae186.jpg
+.. code:: ipython2
+
+   from svgpathtools import *
+
+   doc = SaxDocument()
+
+   doc.elements.append(
+       PathAndAttributes(
+           d='M 0, 0 L 1, 0 1, 1 0, 1 Z M 2, 0 L 3, 0 3, 1 2, 1 Z',
+           fill='none',
+           stroke='red',
+           width=0.15
+       )
+   )
+
+   doc.reset_viewbox(percentage_margins=0.25, with_strokes=True)
+   doc.set_background_color('blanchedalmond')
+   doc.width = '600px'
+   doc.set_height_from_width()
+   doc.display()
+
+yields
 
 .. figure:: https://user-images.githubusercontent.com/19382247/54197407-ca6c7c00-44fe-11e9-9d59-c4f1d7834897.png
 
