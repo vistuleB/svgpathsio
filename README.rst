@@ -191,7 +191,7 @@ complex value ``100+200j``.
 
 For the ``Arc`` constructor, ``radius`` encodes the radii ``rx``, ``ry`` of the
 ellipse in the form of a complex number ``rx + 1j * ry``, while other arguments have their
-usual meaning. (Consult the SVG spec or the ``Arc`` docstring for more details.)
+usual meaning.
 
 .. code:: ipython2
 
