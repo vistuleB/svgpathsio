@@ -118,11 +118,37 @@ those that are closed via ``Z``. For example,
 
    from svgpathtools import *
 
-   doc = SaxDocument()
+   doc = SaxDocument()  # main document class for svgpathtools
 
    doc.elements.append(
        PathAndAttributes(
            d='M 0, 0 L 1, 0 1, 1 0, 1 Z M 2, 0 L 3, 0 3, 1 2, 1 Z',
+           fill='none',
+           stroke='red',
+           width=0.15   # 'width' is an attribute alias for 'stroke-width'
+       )
+   )
+
+   doc.reset_viewbox(percentage_margins=0.25, with_strokes=True)
+   doc.set_background_color('blanchedalmond')
+   doc.width = '600px'
+   doc.display()
+
+yields
+
+.. figure:: https://user-images.githubusercontent.com/19382247/54197407-ca6c7c00-44fe-11e9-9d59-c4f1d7834897.png
+
+whereas
+
+.. code:: ipython2
+
+   from svgpathtools import *
+
+   doc = SaxDocument()
+
+   doc.elements.append(
+       PathAndAttributes(
+           d='M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0',  # !!!! Z's have been removed !!!!
            fill='none',
            stroke='red',
            width=0.15
@@ -132,25 +158,14 @@ those that are closed via ``Z``. For example,
    doc.reset_viewbox(percentage_margins=0.25, with_strokes=True)
    doc.set_background_color('blanchedalmond')
    doc.width = '600px'
-   doc.set_height_from_width()
    doc.display()
 
 yields
 
-.. figure:: https://user-images.githubusercontent.com/19382247/54197407-ca6c7c00-44fe-11e9-9d59-c4f1d7834897.png
-
-whereas
-
-``M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0``  (2)
-
-(with the four missing line segments, but without Z's) renders as
-
 .. figure:: https://user-images.githubusercontent.com/19382247/54197555-351db780-44ff-11e9-92a9-913ee2828399.png
 
 with indented corners, because geometric closure does not equate to
-topological closure. Each ``Subpath`` object remembers whether it is topologically
-closed or not via an internal ``._Z`` boolean property, which can be set
-via the methods ``.set_Z()`` and ``.unset_Z()``, described in more detail below.
+topological closure.
 
 Constructors
 ------------
