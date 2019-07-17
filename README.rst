@@ -132,7 +132,7 @@ those that are closed via ``Z``. For example,
    doc.reset_viewbox(percentage_margins=0.25, with_strokes=True)
    doc.set_background_color('blanchedalmond')
    doc.width = '600px'
-   doc.display()
+   doc.display()        # OR: doc.save('your_filename.svg')
 
 yields
 
