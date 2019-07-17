@@ -105,7 +105,7 @@ forming a closed loop. Lastly, a ``Path`` consists of an arbitrary list of subpa
 
 For example, an SVG path such as 
 
-``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z``  (1)
+``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z``
 
 would end up modeled as a ``Path`` containing two ``Subpath`` s each being a
 sequence of four ``Line`` objects, as each 'Z' command results in an extra line
