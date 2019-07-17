@@ -114,7 +114,7 @@ segment being added to close off that subpath.
 Note that SVG distinguishes between subpaths that are merely geometrically closed and
 those that are closed via ``Z``. For example, the above path renders as
 
-.. figure:: https://user-images.githubusercontent.com/19382247/61361744-4e55bc80-a881-11e9-9fd5-8b082bbaf4db.jpg
+.. figure:: https://user-images.githubusercontent.com/19382247/61361941-a12f7400-a881-11e9-91b2-6e077f9ae186.jpg
 
 .. figure:: https://user-images.githubusercontent.com/19382247/54197407-ca6c7c00-44fe-11e9-9d59-c4f1d7834897.png
 
