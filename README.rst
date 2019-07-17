@@ -125,7 +125,7 @@ those that are closed via ``Z``. For example,
            d='M 0, 0 L 1, 0 1, 1 0, 1 Z M 2, 0 L 3, 0 3, 1 2, 1 Z',
            fill='none',
            stroke='red',
-           width=0.15   # 'width' is an attribute alias for 'stroke-width'
+           width=0.15   # sets the stroke width
        )
    )
 
