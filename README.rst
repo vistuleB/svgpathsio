@@ -1,27 +1,33 @@
-svgpathtools offset and stroke fork!
-====================================
+svgpathtools offset and stroke fork
+===================================
 
-This is a (hopefully, temporary) fork of mathandy/svgpathtools, 
+This is a fork of mathandy/svgpathtools, 
 a collection of tools for manipulating and analyzing SVG
 Path objects and Bézier curves.
 
-Mainly, this fork adds proper support for subpaths as well
-as stroke and offset utilities. Various other small details of the API
-have been improved.
+This is an advanced fork that adds support for subpaths, stroke, 
+offsets, addresses, path
+cropping, as well as path union and intersections. A number of bugs
+and incompletenesses have been removed. Some legacy elements of 
+the API that maintained backward-compatibility with older versions of the
+library have also been removed.
 
+The SaxDocument class included in this fork also has the following 
+additional features:
 
-Features
---------
+- supports a `<style>` element and CSS manipulation
+- supports `<defs>` and `<use>`
+- supports `<text>` and `<textPath>`
+
+Overview of Features
+--------------------
 
 svgpathtools contains functions designed to **easily read, write and
 display SVG files** as well as a selection of
 geometrically-oriented tools to **transform and analyze path
 elements**.
 
-Additionally, the submodule *bezier.py* contains tools for working
-with general **nth order Bezier curves stored as n-tuples**.
-
-Some of the tools inherited from the original mathandy/svgpathtools:
+Some of the capabilities of the original svgpathtools package:
 
 -  **read**, **write**, and **display** SVG files containing Path (and
    other) SVG elements
@@ -44,28 +50,31 @@ Some of the tools inherited from the original mathandy/svgpathtools:
 -  convenience functions, such the generation of hexadecimal color
    codes from RGB color tuples and back
    
-Some of the extra goodies included in this fork:
+Additional capabilities, in this fork:
 
-
--  work with a proper **class structure** to enable code reuse between
-   Segments, Subpaths and Paths, and for a cleaner API
--  generate **strokes** and **offsets** of paths, using any of the standard
+-  support for paths made up of multiple subpaths
+-  crop paths to the inside/outside of a given window, or to 
+   the inside/outside of an arbitrary path
+-  generate path offsets
+-  generate path strokes, using any combination of the standard
    SVG options for 'cap' and 'join'
--  enjoy full support and a proper API for paths made up of **multiple subpaths** and manipulate **subpath closure** on a subpath-by-subpath basis
--  **convert elliptical arc segments** to bezier-based subpaths, to
+-  compute path unions
+-  convert elliptical arc segments to bezier-based subpaths, to
    desired accuracy
--  use **Address objects** as one-size-fits-all parameters
--  style your paths, text and dots elements with **PathAndAttributes**,
-   **TextAndAttributes** and **DotAndAttributes** classes
--  use the **SaxDocument** class to easily keep track of definitions,
-   styles, as well as of the afore-mentioned dot, paths and text elements
--  compute the **bounding box** of a group of PathAndAttribute objects 
-   while optionally taking stroke widths into consideration
--  automatically compute the **viewbox** of a document from its
-   contents (warning: as of this writing, text elements are not taken into account)
--  use **classes and css styles** to style paths in your SaxDocument
--  enjoy more diverse **pretty-printing** options for Path objects
-
+-  use **Address** objects to specify positions of points on paths, while
+   having access to the underlying parameterizations if desired
+-  attributes and elements conviently bundled via new **PathAndAttributes**,
+   **TextAndAttributes**, **DotAndAttributes**, **UseAndAttributes**
+   and **GroupAndAttributes** objects
+-  support for a <style> element
+-  support for SVG's <defs> and <use>
+-  compute the bounding box of a group of elements while taking stroke
+   widths into consideration (nb: text elements are currently not taken into
+   account)
+-  automatically set the viewbox of a document from its elements, including
+   absolute or size-relative margins (though as above, text elements are not 
+   currently taken into account)
+-  easily set the background color of a document
 
 Prerequisites
 -------------
@@ -91,32 +100,75 @@ inherit from an abstract ``Segment`` superclass.
 The module also contains two container classes, ``Path`` and ``Subpath``.
 A ``Subpath`` object consists of a list of end-to-end segments, possibly
 forming a closed loop. Lastly, a ``Path`` consists of an arbitrary list of subpaths.
+Note that a ``Z`` command may result in an additional line segment being
+added to a subpath, in order to close off the subpath.
 
 For example, an SVG path such as 
 
-``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z``  (1)
+``M 0,0 L 1,0 1,1 0,1 Z M 2,0 L 3,0 3,1 2,1 Z``
 
-would end up modeled as a ``Path`` containing two ``Subpath`` s each being a
-sequence of four ``Line`` objects. (Each 'Z' command results in an extra line
-segment being added to close off that subpath.) 
+would end up modeled as a ``Path`` containing two ``Subpath``s, wich each 
+``Subpath`` being a
+sequence of four ``Line`` objects. (As explained above, the ``Z`` commands
+result in a fourth ``Line`` being added to each subpath.)
 
-SVG distinguishes between subpaths that are merely geometrically closed and
-those that are closed via a ``Z`` command. For example, (1) renders as
+Note that SVG distinguishes between subpaths that are merely geometrically closed and
+those that are closed via ``Z``. For example,
+
+.. code:: ipython2
+
+   from svgpathtools import *
+
+   doc = SaxDocument()  # main document class for svgpathtools
+
+   doc.elements.append(
+       PathAndAttributes(
+           d='M 0, 0 L 1, 0 1, 1 0, 1 Z M 2, 0 L 3, 0 3, 1 2, 1 Z',
+           fill='none',
+           stroke='red',
+           width=0.15   # sets the stroke width
+       )
+   )
+
+   doc.reset_viewbox(percentage_margins=0.25, with_strokes=True)
+   doc.set_background_color('blanchedalmond')
+   doc.width = '600px'
+   doc.display()        # or: doc.save('your_filename.svg')
+
+yields
 
 .. figure:: https://user-images.githubusercontent.com/19382247/54197407-ca6c7c00-44fe-11e9-9d59-c4f1d7834897.png
 
 whereas
 
-``M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0``  (2)
+.. code:: ipython2
 
-(with the four missing line segments, but without Z's) renders as
+   from svgpathtools import *
+
+   doc = SaxDocument()
+
+   doc.elements.append(
+       PathAndAttributes(
+           d='M 0,0 L 1,0 1,1 0,1 0,0 M 2,0 L 3,0 3,1 2,1 2,0',  # !!!! Z's have been removed !!!!
+           fill='none',
+           stroke='red',
+           width=0.15
+       )
+   )
+
+   doc.reset_viewbox(percentage_margins=0.25, with_strokes=True)
+   doc.set_background_color('blanchedalmond')
+   doc.width = '600px'
+   doc.display()
+
+yields
 
 .. figure:: https://user-images.githubusercontent.com/19382247/54197555-351db780-44ff-11e9-92a9-913ee2828399.png
 
 with indented corners, because geometric closure does not equate to
-topological closure. Each ``Subpath`` object remembers whether it is topologically
-closed or not via an internal ``._Z`` boolean property, which can be set
-via the methods ``.set_Z()`` and ``.unset_Z()``, described in more detail below.
+topological closure. Topological closure is controlled on a subpath-by-subpath
+basis via the methods ``.set_Z()`` and ``.unset_Z()``, described in more detail
+below.
 
 Constructors
 ------------
@@ -142,7 +194,7 @@ complex value ``100+200j``.
 
 For the ``Arc`` constructor, ``radius`` encodes the radii ``rx``, ``ry`` of the
 ellipse in the form of a complex number ``rx + 1j * ry``, while other arguments have their
-usual meaning. (Consult the SVG spec or the ``Arc`` docstring for more details.)
+usual meaning as per the SVG spec.
 
 .. code:: ipython2
 
@@ -152,10 +204,10 @@ usual meaning. (Consult the SVG spec or the ``Arc`` docstring for more details.)
     seg2 = Line(200+300j, 250+350j)                             # A line beginning at (200, 300) and ending at (250, 350)
     seg3 = QuadraticBezier(0, 100, 100+100j)                    # A quadratic beginning at (0, 0) and ending at (100, 100)
     
-    seg1.end  # 200+300j
+    seg1.end    # 200+300j
     seg2.start  # 200+300j
     
-    subpath1 = Subpath(seg1, seg2)  # A subpath consisting of seg1 followed by seg2
+    subpath1 = Subpath(seg1, seg2)      # A subpath consisting of seg1 followed by seg2
     
     try:
         subpath2 = Subpath(seg1, seg3)  # Throws an exception because seg1.end != seg3.start, and because subpaths consist of a list of contiguous segments
@@ -166,9 +218,9 @@ usual meaning. (Consult the SVG spec or the ``Arc`` docstring for more details.)
     subpath1.Z  # False; subpath1 is not geometrically closed, let alone topologically closed
 
     try:
-        subpath1.set_Z()  # Throws because subpath1 is not geometrically closed
+        subpath1.set_Z()                # Throws because subpath1 is not geometrically closed
     except ValueError:
-        subpath1.set_Z(forceful=True)  # Adds a line segment to subpath1, closes it topologically
+        subpath1.set_Z(forceful=True)   # Adds a line segment to subpath1, closes it topologically
         print("\nsubpath1 after forceful closure:")
         print(subpath1)
 
