@@ -18,6 +18,7 @@ import numpy as np
 try:
     from scipy.integrate import quad
     _quad_available = True
+
 except ImportError:
     _quad_available = False
 
@@ -30,7 +31,7 @@ from .bezier import \
     polynomial2bezier, bezier2polynomial
 
 from .misctools import \
-    BugException
+    BugException, complex_numbers_iterator
 
 from .polytools import \
     rational_limit, polyroots, polyroots01, imag, real
@@ -62,7 +63,8 @@ COMMAND_TO_NUMBER_SEPARATOR = ' '
 NUMBER_TO_NUMBER_SEPARATOR = ','
 SEGMENT_TO_SEGMENT_SEPARATOR = '  '
 
-_d_string_params = {
+svgpathtools_d_string_params = {
+    'decimals': None,
     'use_V_and_H': True,
     'use_S_and_T': False,
     'use_relative_cors': False,
@@ -75,11 +77,11 @@ _d_string_params = {
     'include_elidable_first_line': True,
     'elided_command_replacement': ' ',
     'elided_line_command_replacement': ' ',
-    'elided_first_line_command_replacement': ' '
+    'elided_first_line_command_replacement': ' ',
 }
 
 _d_string_must_be_strings_params = {
-    f for f in _d_string_params if isinstance(_d_string_params[f], str)
+    f for f in svgpathtools_d_string_params if isinstance(svgpathtools_d_string_params[f], str)
 }
 
 _d_string_must_be_pure_spaces_params = _d_string_must_be_strings_params
@@ -100,15 +102,18 @@ _NotImplemented4ArcException = \
 def points2lines(*points):
     if len(points) < 2:
         raise ValueError("please provide at least two points")
+
     lines = []
     for start, end in zip(points[:-1], points[1:]):
         lines.append(Line(start, end))
+
     return lines
 
 
 def points2polyline(*points, return_Subpath=False):
     if return_Subpath:
         return Subpath(*points2lines(*points))
+
     else:
         return Path(Subpath(*points2lines(*points)))
 
@@ -116,6 +121,7 @@ def points2polyline(*points, return_Subpath=False):
 def points2polygon(*points, return_Subpath=False):
     if return_Subpath:
         return Subpath(*points2lines(*points)).set_Z(forceful=True)
+
     else:
         return Path(Subpath(*points2lines(*points)).set_Z(forceful=True))
 
@@ -140,6 +146,188 @@ def bbox2path(xmin, xmax, ymin, ymax):
     the bounding box.
     """
     return Path(bbox2subpath(xmin, xmax, ymin, ymax))
+
+
+def rounded_corner_constructor(a, b, c, r, invert_corner=False):
+    assert r >= 0
+
+    l1 = a - b
+    l2 = c - b
+
+    if abs(l1) < r or \
+       abs(l2) < r:
+        raise ValueError
+
+    e1 = b + l1 * r / abs(l1)
+    e2 = b + l2 * r / abs(l2)
+
+    if r / abs(l1) == 0.5:
+        e1 = a + (b - a) * 0.5
+
+    elif r / abs(l1) == 1:
+        e1 = a
+
+    if r / abs(l2) == 1:
+        e2 = c
+
+    if a.imag == b.imag:
+        imag = a.imag
+        real = b.real + r * (1 if a.real > b.real else -1)
+        if r / abs(l1) == 0.5:
+            real = a.real - r * (1 if a.real > b.real else -1)
+        elif r / abs(l1) == 1:
+            real = a.real
+        e1 = complex(real, imag)
+
+    elif a.real == b.real:
+        real = a.real
+        imag = b.imag + r * (1 if a.imag > b.imag else -1)
+        if r / abs(l1) == 0.5:
+            imag = a.imag - r * (1 if a.imag > b.imag else -1)
+        elif r / abs(l1) == 1:
+            imag = a.imag
+        e1 = complex(real, imag)
+
+    if c.imag == b.imag:
+        imag = c.imag
+        real = b.real + r * (1 if c.real > b.real else -1)
+        if r / abs(l2) == 0.5:
+            real = c.real - r * (1 if c.real > b.real else -1)
+        elif r / abs(l2) == 1:
+            real = c.real
+        e2 = complex(real, imag)
+
+    elif c.real == b.real:
+        real = c.real
+        imag = b.imag + r * (1 if c.imag > b.imag else -1)
+        if r / abs(l2) == 0.5:
+            imag = c.imag - r * (1 if c.imag > b.imag else -1)
+        elif r / abs(l2) == 1:
+            imag = c.imag
+        e2 = complex(real, imag)
+
+    sweep = 1 if (l2 / l1).imag < 0 else 0
+    if invert_corner:
+        sweep = 1 - sweep
+
+    return e1, e2, sweep
+
+
+def rounded_polyline(*args, radius=None, invert_corners=False, split_arcs=False):
+    corners = list(complex_numbers_iterator(*args))
+
+    data = []
+    for a, b, c in zip(corners, corners[1:], corners[2:]):
+        e1, e2, sweep = rounded_corner_constructor(a, b, c, radius, invert_corners)
+        data.append((e1, e2, sweep))
+
+    if len(data) == 0:
+        return points2polyline(corners)
+
+    R = radius + 1j * radius
+    mister = Subpath()
+
+    if corners[0] != data[0][0]:
+        mister.append(Line(corners[0], data[0][0]))
+
+    for e1, e2, sweep in data:
+        if e1 != mister.end and mister.end is not None:
+            mister.append(Line(mister.end, e1))
+
+        a = Arc(start=e1,
+                radius=R,
+                rotation=0,
+                large_arc=0,
+                sweep=sweep,
+                end=e2)
+
+        if not split_arcs:
+            mister.append(a)
+
+        else:
+            arcs = a.split(0.5)
+            assert len(arcs) == 2
+            assert all(isinstance(b, Arc) for b in arcs)
+            assert arcs[0].start == a.start
+            assert arcs[-1].end == a.end
+            mister.extend(*arcs)
+
+    if corners[-1] != data[-1][1]:
+        mister.append(Line(mister.end, corners[-1]))
+
+    return Path(mister)
+
+
+def rounded_polygon(*args, radius=None):
+    if radius is None:
+        raise ValueError("radius argument missing")
+
+    corners = list(complex_numbers_iterator(*args))
+
+    if corners[0] != corners[-1]:
+        corners.append(corners[0])
+    corners.append(corners[1])
+
+    if len(corners) < 3 + 2:
+        raise ValueError
+
+    data = []
+    for a, b, c in zip(corners, corners[1:], corners[2:]):
+        e1, e2, sweep = rounded_corner_constructor(a, b, c, radius)
+        data.append((e1, e2, sweep))
+
+    segments = []
+    R = radius + 1j * radius
+    data.insert(0, data[-1])
+    for (prev_e1, prev_e2, prev_sweep), (next_e1, next_e2, next_sweep) in zip(
+        data, data[1:]
+    ):
+        if prev_e2 != next_e1:
+            segments.append(Line(prev_e2, next_e1))
+
+        segments.append(Arc(start=next_e1,
+                            radius=R,
+                            rotation=0,
+                            large_arc=0,
+                            sweep=next_sweep,
+                            end=next_e2))
+
+    return Path(Subpath(*segments).set_Z())
+
+
+def reflect_complex_through(c, direction):
+    return direction * (c / direction).conjugate()
+
+
+def vanilla_cubic_interpolator(*args, z=0.37):
+    points = list(complex_numbers_iterator(*args))
+
+    if len(points) <= 1:
+        raise ValueError("not enough points in vanilla_cubic_interpolator")
+
+    if len(points) == 2:
+        return Subpath(Line(points[0], points[1]))
+
+    lengths = [abs(points[i + 1] - points[i]) for i in range(len(points) - 1)]
+    v_dirs = [None]
+    for i in range(1, len(points) - 1):
+        v_dirs.append(points[i + 1] - points[i - 1])
+        v_dirs[-1] /= abs(v_dirs[-1])
+    v_dirs[0] = -reflect_complex_through(v_dirs[1], (points[1] - points[0]) * 1j)
+    v_dirs.append(-reflect_complex_through(v_dirs[-1], (points[-1] - points[-2]) * 1j))
+
+    assert all(np.isclose(1, abs(v)) for v in v_dirs)
+    assert len(v_dirs) == len(points)
+
+    to_return = Subpath()
+    for i in range(len(points) - 1):
+        c = lengths[i] * z
+        to_return.append(CubicBezier(points[i], points[i] + v_dirs[i] * c, points[i + 1] - v_dirs[i + 1] * c, points[i + 1]))
+
+    assert len(to_return) == len(points) - 1
+
+    return to_return
+
 
 # Miscellaneous  #############################################################
 
@@ -231,6 +419,11 @@ def num_segments_in(thing):
 # Could maybe have been in bezier.py, but is not:  ###########################
 
 
+def complex_determinant(z, w):
+    return np.linalg.det(np.array([[real(z), real(w)],
+                                   [imag(z), imag(w)]]))
+
+
 def complex_linear_congruence(a, z, b, w):
     """
     Solves a + l * z = b + m * w for real l, m where a, z, b, w are complex.
@@ -311,10 +504,7 @@ def poly2bez(poly, return_bpoints=False):
     Note: The inverse operation is available as a method of CubicBezier,
     QuadraticBezier and Line objects."""
     bpoints = polynomial2bezier(poly)
-    if return_bpoints:
-        return bpoints
-    else:
-        return bpoints2bezier(*bpoints)
+    return bpoints if return_bpoints else bpoints2bezier(*bpoints)
 
 
 def bez2poly(bez, numpy_ordering=True, return_poly1d=False):
@@ -337,7 +527,7 @@ def bez2poly(bez, numpy_ordering=True, return_poly1d=False):
 
 
 def transform(curve, tf):
-    """Transforms the curve by the homogeneous transformation matrix tf"""
+    """Returns transformed copy of the curve by the homogeneous transformation matrix tf"""
     def to_point(p):
         return np.array([[p.real], [p.imag], [1.0]])
 
@@ -425,7 +615,7 @@ def scale(curve, x, y=None, origin=0j):
 
 def translate(curve, x, y=0):
     """
-    Shifts the curve by the complex quantity z = x + 1 j * y, such that
+    Returns a shifted copy of 'curve' by the complex quantity z = x + 1 j * y, such that
     translate(curve, x, y).point(t) = curve.point(t) + z. Note that x can be complex.
     Therefore, translate(curve, 10, 10) and translate(curve, 10 + 10j) are equivalent.
     """
@@ -579,11 +769,22 @@ def segment_length(curve, start, end, start_point, end_point,
     return length2
 
 
+def inv_arclength_01(curve, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
+                     error=ILENGTH_ERROR, min_depth=ILENGTH_MIN_DEPTH):
+    """
+    Takes a value s in [0, 1] and returns a value t such that curve.point(t)
+    is a distance s * curve.length() from curve.point(0) along curve.
+    """
+    if not 0 <= s <= 1:
+        raise ValueError("expecting value in [0, 1]")
+    return inv_arclength(curve, s * curve.length(), s_tol, maxits,
+                         error, min_depth)
+
+
 def inv_arclength(curve, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
                   error=ILENGTH_ERROR, min_depth=ILENGTH_MIN_DEPTH):
     """
-    INPUT: curve should be a CubicBezier, Line, or Path or Subpath
-    of CubicBezier and / or Line objects.
+    INPUT: curve may be any type of Segment, a Subpath or a Path
     OUTPUT: Returns a float, t, such that the arc length of curve from 0 to
     t is approximately s.
     s_tol - exit when |s(t) - s| < s_tol where
@@ -608,9 +809,7 @@ def inv_arclength(curve, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
         t = s / curve.length(error=error, min_depth=min_depth)
         return Address(t=t)
 
-    elif (isinstance(curve, QuadraticBezier) or
-          isinstance(curve, CubicBezier) or
-          isinstance(curve, Arc)):
+    elif isinstance(curve, Segment):
         t_upper = 1
         t_lower = 0
         iteration = 0
@@ -1645,7 +1844,7 @@ class Address(object):
             if self._t is None:
                 self._t = val
             else:
-                if self.t != val:
+                if self._t != val and not np.isclose(self._t, val):
                     raise ValueError(f"Attempt to overwrite Address.t = "
                                      f"{self._t} with {val}")
 
@@ -1660,7 +1859,7 @@ class Address(object):
             if self._T is None:
                 self._T = val
             else:
-                if self._T != val:
+                if self._T != val and not np.isclose(self._T, val):
                     raise ValueError(f"Attempt to overwrite Address.T = "
                                      f"{self._T} with {val}")
 
@@ -1675,7 +1874,7 @@ class Address(object):
             if self._W is None:
                 self._W = val
             else:
-                if self._W != val:
+                if self._W != val and not np.isclose(self._W, val):
                     raise ValueError(f"Attempt to overwrite Address.W = "
                                      f"{self._W} with {val}")
 
@@ -1798,7 +1997,8 @@ _repr_option_names = {
     'use_fixed_indent',
     'constructor_ready',
     'pad_operators',
-    'indent_size'
+    'indent_size',
+    'decimals'
 }
 
 
@@ -1806,12 +2006,13 @@ def _load_repr_options_for(shortname):
     to_return = {
         'use_keywords': False,
         'use_parens': False,
-        'use_commas': False,
+        'use_commas': True,
         'use_oneline': False,
         'use_fixed_indent': True,
         'constructor_ready': False,
         'pad_operators': False,
-        'indent_size': 4
+        'indent_size': 4,
+        'decimals': None
     }
 
     assert all(k in _repr_option_names for k in to_return)
@@ -2059,16 +2260,50 @@ class Curve(object):
         self._own_repr_options.update(options)
 
     def __repr__(self, tmp_options={}, forced_options={}):
+        # def reduce_decimals_in(string, num_decimals):
+        #     assert isinstance(num_decimals, int)
+        #     assert 0 <= num_decimals < 10
+        #     copied_so_far = ''
+        #     i = 0
+        #     while i < len(string):
+        #         if string[i] == '.':
+        #             mister = '0.'
+        #             j = i + 1
+        #             while j < len(string) and string[j] in '0123456789':
+        #                 mister += string[j]
+        #                 j += 1
+        #             i = j
+        #             truncated = f'{float(mister):.{num_decimals}f}'
+        #             if not truncated.startswith('0.'):
+        #                 print("truncated:", truncated)
+        #                 print("mister:", mister)
+        #             assert truncated.startswith('0.')
+        #             while truncated.endswith('0'):
+        #                 truncated = truncated[:-1]
+        #             if len(truncated) > 2:
+        #                 copied_so_far = copied_so_far + truncated[1:]
+        #         else:
+        #             copied_so_far += string[i]
+        #             i += 1
+        #     return copied_so_far
+
         def repr_num(z):
-            string = str(z)
+            if options['decimals'] is None:
+                string = str(z)
+
+            else:
+                string = f"{z:.{options['decimals']}f}"
+
             if not options['use_parens']:
                 string = string.strip('()')
+
             if options['pad_operators']:
                 string = ' + '.join(string.split('+'))
                 if string.startswith('-'):
                     string = '-' + ' - '.join(string.split('-')[1:])
                 else:
                     string = ' - '.join(string.split('-'))
+
             return string
 
         options = self._own_repr_options.copy()
@@ -2170,11 +2405,18 @@ class Curve(object):
             raise ValueError("scaled takes one or two real-valued inputs to avoid ambiguities")
         return scale(self, x, y, origin)
 
-    def transformed(self, matrix):
-        return transform(self, matrix)
+    def transformed(self, tf):
+        return transform(self, tf)
 
     def cloned(self):
         return self.translated(0)
+
+    def ilength_01(self, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
+                   error=ILENGTH_ERROR, min_depth=ILENGTH_MIN_DEPTH):
+        """Returns a float, u, such that self.length(0, u) is approximately s * self.length().
+        See the inv_arclength_01() docstring for more details."""
+        return inv_arclength_01(self, s, s_tol=s_tol, maxits=maxits, error=error,
+                                min_depth=min_depth)
 
     def ilength(self, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
                 error=ILENGTH_ERROR, min_depth=ILENGTH_MIN_DEPTH):
@@ -2182,6 +2424,12 @@ class Curve(object):
         See the inv_arclength() docstring for more details."""
         return inv_arclength(self, s, s_tol=s_tol, maxits=maxits, error=error,
                              min_depth=min_depth)
+
+    def arcpoint(self, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
+                 error=ILENGTH_ERROR, min_depth=ILENGTH_MIN_DEPTH):
+        """Returns point at arclength s from start of curve."""
+        return self.point(self.ilength(s, s_tol=s_tol, maxits=maxits, error=error,
+                                       min_depth=min_depth))
 
     def joins_smoothly_with(self, previous, wrt_parameterization=False):
         """Checks if this curve joins smoothly with (Curve) previous.
@@ -2251,34 +2499,59 @@ class Curve(object):
         assert isinstance(time_values, list)
         return multisplit(self, time_values)
 
-    def xbox(self):
+    def xbox(self, stroke_width=None):
         """
         Returns xmin, xmax: smallest and lowest x-coordinates of curve.
         Overwritten by BezierSegment, Line and Arc.
         """
+        if stroke_width is not None:
+            return self.stroke(stroke_width).xbox()
+
         boxes = [thing.xbox() for thing in self]
         return \
             min(b[0] for b in boxes), \
             max(b[1] for b in boxes)
 
-    def ybox(self):
+    def ybox(self, stroke_width=None):
         """
         Returns ymin, ymax: smallest and lowest y-coordinates of curve.
         Overwritten by BezierSegment, Line and Arc.
         """
+        if stroke_width is not None:
+            return self.stroke(stroke_width).ybox()
+
         boxes = [thing.ybox() for thing in self]
         return \
             min(b[0] for b in boxes), \
             max(b[1] for b in boxes)
 
-    def bbox(self):
+    def bbox(self, stroke_width=None):
         """
-        Returns the bounding box for the curve in the form xmin, xmax, ymin,
-        ymax.
+        Returns the bounding box for the curve in the form xmin, xmax, ymin, ymax.
         """
-        xmin, xmax = self.xbox()
-        ymin, ymax = self.ybox()
+        if stroke_width is not None:
+            return self.stroke(stroke_width).bbox()
+
+        xmin, xmax = self.xbox(stroke_width)
+        ymin, ymax = self.ybox(stroke_width)
         return xmin, xmax, ymin, ymax
+
+    def bbox_width(self, stroke_width=None):
+        xmin, xmax = self.xbox(stroke_width=stroke_width)
+        return xmax - xmin
+
+    def bbox_height(self, stroke_width=None):
+        ymin, ymax = self.ybox(stroke_width=stroke_width)
+        return ymax - ymin
+
+    def scale_about_centroid(self, sx, sy):
+        xmin, xmax, ymin, ymax = self.bbox()
+        centroid = (xmin + xmax) / 2 + 1j * (ymin + ymax) / 2
+        return self.transformed(parse_transform(
+            'translate', centroid,
+            'scale', sx, sy,
+            'translate', -centroid
+        ))
 
     @property
     def xmin(self):
@@ -2487,6 +2760,11 @@ class Segment(ContinuousCurve):
 
         return self.tweaked(start=new_x + 1j * new_y)
 
+    def stroke(self, width, quality=0.01, safety=5,
+               cap='butt', reversed=False):
+        return Subpath(self).stroke(width, quality=quality, safety=safety,
+                                    cap=cap, reversed=reversed)
+
 
 class BezierSegment(Segment):
     def pro_offset(self, amount, quality=0.01, safety=5, two_sided=False):
@@ -2570,12 +2848,16 @@ class BezierSegment(Segment):
         _, ymax = bezier_ybox(self)
         return ymax
 
-    def xbox(self):
+    def xbox(self, stroke_width=None):
         # Overwritten by Line
+        if stroke_width is not None:
+            return self.stroke(stroke_width).xbox()
         return bezier_xbox(self)
 
-    def ybox(self):
+    def ybox(self, stroke_width=None):
         # Overwritten by Line
+        if stroke_width is not None:
+            return self.stroke(stroke_width).ybox()
         return bezier_ybox(self)
 
     def unit_tangent(self, t_or_address):
@@ -2813,7 +3095,8 @@ class Line(BezierSegment):
         Returns the signed length of the line segment between t0 and t1, where
         t0, t1 default to 0, 1 and can be given as addresses or as floats.
 
-        The keyword parameters, t0, t1 can also be given as addresses."""
+        The keyword parameters, t0, t1 can also be given as addresses.
+        """
         t0 = address2param(self, t0)
         t1 = address2param(self, t1)
         return abs(self._end - self._start) * (t1 - t0)
@@ -2829,11 +3112,9 @@ class Line(BezierSegment):
     def poly(self, return_coeffs=False):
         """returns the line as a Polynomial object."""
         p = self.bpoints
-        coeffs = ([p[1] - p[0], p[0]])
-        if return_coeffs:
-            return coeffs
-        else:
-            return np.poly1d(coeffs)
+        coeffs = ([p[1] - p[0],
+                   p[0]])
+        return coeffs if return_coeffs else np.poly1d(coeffs)
 
     def derivative(self, t=None, n=1):
         """returns the nth derivative of the segment at t, which, given that
@@ -2861,31 +3142,26 @@ class Line(BezierSegment):
         """returns a copy of the Line object with its orientation reversed"""
         return Line(self._end, self._start)
 
-    def xbox(self):
+    def xbox(self, stroke_width=None):
+        if stroke_width is not None:
+            return self.stroke(stroke_width).xbox()
+
         return \
             min(self._start.real, self._end.real), \
             max(self._start.real, self._end.real)
 
-    def ybox(self):
+    def ybox(self, stroke_width=None):
+        if stroke_width is not None:
+            return self.stroke(stroke_width).ybox()
+
         return \
             min(self._start.imag, self._end.imag), \
             max(self._start.imag, self._end.imag)
 
-    # @property
-    # def xmin(self):
-    #     return min(self._start.real, self._end.real)
-
-    # @property
-    # def xmax(self):
-    #     return max(self._start.real, self._end.real)
-
-    # @property
-    # def ymin(self):
-    #     return min(self._start.imag, self._end.imag)
-
-    # @property
-    # def ymax(self):
-    #     return max(self._start.imag, self._end.imag)
+    def parallel_to(self, other):
+        if not isinstance(other, Line):
+            raise ValueError("expecting Line segment in parallel_to")
+        return np.isclose(complex_determinant(self.end - self.start, other.end - other.start), 0)
 
     def cropped(self, t0_or_address, t1_or_address):
         """returns a cropped copy of this segment which starts at
@@ -3015,11 +3291,10 @@ class QuadraticBezier(BezierSegment):
     def poly(self, return_coeffs=False):
         """returns the quadratic as a Polynomial object."""
         p = self.bpoints
-        coeffs = (p[0] - 2 * p[1] + p[2], 2 * (p[1] - p[0]), p[0])
-        if return_coeffs:
-            return coeffs
-        else:
-            return np.poly1d(coeffs)
+        coeffs = (p[0] - 2 * p[1] + p[2],
+                  2 * (p[1] - p[0]),
+                  p[0])
+        return coeffs if return_coeffs else np.poly1d(coeffs)
 
     def derivative(self, t_or_address, n=1):
         """returns the nth derivative of the segment at t.
@@ -3164,10 +3439,7 @@ class CubicBezier(BezierSegment):
                   3 * (p[0] - 2 * p[1] + p[2]),
                   3 * (- p[0] + p[1]),
                   p[0])
-        if return_coeffs:
-            return coeffs
-        else:
-            return np.poly1d(coeffs)
+        return coeffs if return_coeffs else np.poly1d(coeffs)
 
     def derivative(self, t, n=1):
         """returns the nth derivative of the segment at t.
@@ -3629,26 +3901,26 @@ class Arc(Segment):
 
         if n % 4 == 0 and n > 0:
             return k * (
-                (rx * cos(phi) * cos(angle) - ry * sin(phi) * sin(angle)) +
-                (rx * sin(phi) * cos(angle) + ry * cos(phi) * sin(angle)) * 1j
+                (rx * cos(phi) * cos(angle) + ry * (-sin(phi)) * sin(angle)) +
+                (rx * sin(phi) * cos(angle) + ry   * cos(phi)  * sin(angle)) * 1j
             )
 
         elif n % 4 == 1:
             return k * (
-                (-rx * cos(phi) * sin(angle) + ry * sin(phi) * cos(angle)) +
-                (-rx * sin(phi) * sin(angle) - ry * cos(phi) * cos(angle)) * 1j
+                (-rx * cos(phi) * sin(angle) + ry * (-sin(phi)) * cos(angle)) +
+                (-rx * sin(phi) * sin(angle) + ry   * cos(phi)  * cos(angle)) * 1j
             )
 
         elif n % 4 == 2:
             return k * (
-                (-rx * cos(phi) * cos(angle) + ry * sin(phi) * sin(angle)) +
-                (-rx * sin(phi) * cos(angle) - ry * cos(phi) * sin(angle)) * 1j
+                (-rx * cos(phi) * cos(angle) - ry * (-sin(phi)) * sin(angle)) +
+                (-rx * sin(phi) * cos(angle) - ry   * cos(phi)  * sin(angle)) * 1j
             )
 
         elif n % 4 == 3:
             return k * (
-                (rx * cos(phi) * sin(angle) + ry * sin(phi) * cos(angle)) +
-                (rx * sin(phi) * sin(angle) - ry * cos(phi) * cos(angle)) * 1j
+                (rx * cos(phi) * sin(angle) - ry * (-sin(phi)) * cos(angle)) +
+                (rx * sin(phi) * sin(angle) - ry   * cos(phi)  * cos(angle)) * 1j
             )
 
         else:
@@ -3769,11 +4041,18 @@ class Arc(Segment):
         points = [self._start, self._end]
         for k in range(ceil(-A / 180), floor((B - A) / 180) + 1):
             t = (A + k * 180) / B
+            if t > 1 and np.isclose(t, 1):
+                t = 1
+            if t < 0 and np.isclose(t, 0):
+                t = 0
             assert 0 <= t <= 1
             points.append(self.point(t))
         return points
 
-    def xbox(self):
+    def xbox(self, stroke_width=None):
+        if stroke_width is not None:
+            return self.stroke(stroke_width).xbox()
+
         # in-house radian angle as a function of t, 0 <= t <= 1
         # a(t) := (tau/360) * (self.theta + self.delta*t)
 
@@ -3819,7 +4098,10 @@ class Arc(Segment):
             min(p.real for p in candidate_extrema), \
             max(p.real for p in candidate_extrema)
 
-    def ybox(self):
+    def ybox(self, stroke_width=None):
+        if stroke_width is not None:
+            return self.stroke(stroke_width).ybox()
+
         # in-house radian angle as a function of t, 0 <= t <= 1
         # a(t) := (tau/360) * (self.theta + self.delta*t)
 
@@ -3992,9 +4274,6 @@ class Subpath(ContinuousCurve, MutableSequence):
             self.append(s, wiggle_endpoints_into_place)  # ends up calling .insert which itself calls .splice
         self._reset()
 
-    # def shortname(self):
-    #     return 'subpath'
-
     def _reset(self):
         self._length = None
         self._lengths = None
@@ -4030,32 +4309,42 @@ class Subpath(ContinuousCurve, MutableSequence):
         return value
 
     def __delitem__(self, index):  # (MutableSequence abstract class)
-        index = self.__normalize_index(index, len(self) - 1)
-        to_return = self[index]
-        self.splice(index, index + 1, None)
-        return to_return
+        if isinstance(index, int):
+            index = self.__normalize_index(index, len(self) - 1)
+            self.splice(index, index + 1, None)
+
+        elif isinstance(index, slice):
+            if index.step is not None:
+                raise NotImplementedError
+
+            start_index = 0 if index.start is None else int(index.start)
+            end_index = len(self) if index.stop is None else int(index.stop)
+            self.splice(start_index, end_index, Subpath())
+
+        else:
+            raise ValueError
 
     def __len__(self):
         return len(self._segments)  # (MutableSequence abstract class)
 
-    def append(self, thing, wiggle_endpoints_into_place=True):
-        self.splice(len(self), len(self), thing, wiggle_endpoints_into_place)
+    def append(self, thing, wiggle_endpoints_into_place=True, bridge_discontinuity=False):
+        self.splice(len(self), len(self), thing, wiggle_endpoints_into_place, bridge_discontinuity=bridge_discontinuity)
 
-    def insert(self, index, value):  # (MutableSequence abstract class)
+    def insert(self, index, value, bridge_discontinuity=False):  # (MutableSequence abstract class)
         if index < 0:
             index += len(self)
         if not 0 <= index <= len(self):
             raise ValueError("index out of bounds")
-        return self.splice(index, index, value)
+        return self.splice(index, index, value, bridge_discontinuity=bridge_discontinuity)
 
     # overwrites native extend:
-    def extend(self, *things):
+    def extend(self, *things, bridge_discontinuity=False):
         # This is tricky; we have to pre-group curves in things for
         # absolute correctness, but not fall into infinite recursion
         container = Subpath()
         for t in things:
             container.append(t)  # self.append must not call self.extend!
-        self.splice(len(self), len(self), container)
+        self.splice(len(self), len(self), container, bridge_discontinuity=bridge_discontinuity)
         return self
 
     def mod_index(self, index, use_Z):
@@ -4091,7 +4380,7 @@ class Subpath(ContinuousCurve, MutableSequence):
     def prepend(self, value):
         return self.insert(0, value)
 
-    def splice(self, start_index, end_index, value, wiggle_endpoints_into_place=True):
+    def splice(self, start_index, end_index, value, wiggle_endpoints_into_place=True, bridge_discontinuity=False):
         """
         replaces segments of indices start_index, ..., end_index - 1 with
         the (segments in) value, which may be a segment, a subpath, or a
@@ -4145,6 +4434,9 @@ class Subpath(ContinuousCurve, MutableSequence):
                     # reset next, as well...
                     next = self.next_segment(end_index - 1, use_Z=True)
 
+                elif bridge_discontinuity:
+                    pass
+
                 else:
                     raise ValueError("Subpath.splice .start discontinuity")
 
@@ -4164,19 +4456,90 @@ class Subpath(ContinuousCurve, MutableSequence):
                     prev = self.prev_segment(start_index, use_Z=True)
                     assert prev is None or prev.end == value.start
 
+                elif bridge_discontinuity:
+                    pass
+
                 else:
                     raise ValueError("Subpath.splice .end discontinuity", next.start, value.end)
 
         # delete
-        for i in range(start_index, end_index):
+        for i in reversed(range(start_index, end_index)):
             del self._segments[i]
+
+        assert 0 <= start_index <= len(self)
+
+        # just doing a bit of brain farting here
+        new_next = self._segments[start_index] if start_index < len(self) else (
+            None if not self._Z else (
+                self._segments[0] if len(self) > 0 else None
+            )
+        )
+        assert new_next == next
 
         # insert
         for seg in segment_iterator_of(value, back_to_front=True):
             self._segments.insert(start_index, seg)
 
+        if not is_empty_insert:
+            if prev is not None and \
+               prev.end != value.start:
+                if not bridge_discontinuity:
+                    raise BugException
+
+                bridge = Line(prev.end, value.start)
+                self._segments.insert(start_index, bridge)
+
+            if next is not None and \
+               next.start != value.end:
+                if not bridge_discontinuity:
+                    raise BugException
+
+                self._segments.insert(start_index + len(value), Line(value.end, next.start))
+
         self._reset()
 
+        return self
+
+    def smelt_colinear_line_segments(self):
+        if len(self) <= 1:
+            return self
+
+        new_segments = [self[0]]
+        for i in range(1, len(self)):
+            next_segment = self[i]
+            last_segment = new_segments[-1]
+            assert last_segment.end == next_segment.start
+
+            if False:
+                new_segments.append(next_segment)
+                continue
+
+            if not isinstance(next_segment, Line) or \
+               not isinstance(last_segment, Line) or \
+               not next_segment.parallel_to(last_segment):
+                new_segments.append(next_segment)
+                continue
+
+            new_segments[-1] = last_segment.tweaked(end=next_segment.end)
+
+        self._segments = new_segments
+        self._check_health()
+        return self
+
+    def cyclical_rotate_segments(self, how_much):
+        """
+        'how_much' will be the index of the new starting segment
+        """
+        if not self._Z:
+            raise ValueError("rotating starting segment requires loop")
+
+        new_segments = []
+        for i in range(len(self)):
+            new_segments.append(self._segments[(i + how_much) % len(self)])
+        assert len(new_segments) == len(self._segments)
+
+        self._segments = new_segments
+        self._check_health()
         return self
 
     def reversed(self):
@@ -4317,12 +4680,12 @@ class Subpath(ContinuousCurve, MutableSequence):
         names.
         """
         op = {}
-        op.update(_d_string_params)
+        op.update(svgpathtools_d_string_params)
         op.update(options)
         op.update(kw)
 
         for key in op:
-            if key not in _d_string_params:
+            if key not in svgpathtools_d_string_params:
                 raise ValueError(f"unknown d-string option: {key}")
 
         # validating printing options
@@ -4360,6 +4723,25 @@ class Subpath(ContinuousCurve, MutableSequence):
             # print as 10000000000000000 instead of as 10^16).
             if int(num) == num and abs(num) < 1e16:
                 return str(int(num))
+
+            if op['decimals'] is not None:
+                to_places = f"{num:.{op['decimals']}f}"
+                if '.' in to_places:
+                    while to_places[-1] == '0':
+                        to_places = to_places[:-1]
+
+                    if to_places[-1] == '.':
+                        to_places = to_places[:-1]
+
+                else:
+                    assert op['decimals'] == 0
+
+                if to_places == '-0':
+                    to_places = '0'
+
+                assert len(to_places) > 0
+                return to_places
+
             return str(num)
 
         def append_number(num, segment_end=False):
@@ -4387,15 +4769,16 @@ class Subpath(ContinuousCurve, MutableSequence):
             return ans
 
         def append_cor(z, x_only=False, y_only=False, segment_end=False):
-            nonlocal parts, last_end
+            nonlocal parts, last_end, previous_segment
             w = z
-            if op['use_relative_cors'] and previous_segment is not None:
-                w = z - previous_segment.end
+            if op['use_relative_cors'] and last_end is not None:
+                w = z - last_end
 
             parts.append(format_complex(w, x_only=x_only, y_only=y_only))
 
             if not segment_end:
                 parts.append(' ')
+
             else:
                 last_end = z
 
@@ -4413,6 +4796,7 @@ class Subpath(ContinuousCurve, MutableSequence):
 
             if op['use_relative_cors']:
                 c += command.lower()
+
             else:
                 c += command
 
@@ -4452,9 +4836,10 @@ class Subpath(ContinuousCurve, MutableSequence):
 
         parts = []
         previous_command = None
-        last_end = None
+        last_end = previous_segment.end if previous_segment is not None else None
         append_command('M')
         append_cor(self.start, segment_end=True)
+        assert last_end is not None
 
         for index, segment in enumerate(self):
             assert \
@@ -4887,6 +5272,19 @@ class Subpath(ContinuousCurve, MutableSequence):
         np.isclose(seg.start, seg.eng) are dropped from the final answer.
         This can (theoretically) result in an empty subpath being returned.
         """
+        def subpath_greater_than(adr1, adr2):
+            if adr1.T > adr2.T:
+                return True
+
+            if adr1.T < adr2.T:
+                return False
+
+            if adr1.segment_index > adr2.segment_index:
+                assert adr1.t == 0 and adr1.t == 1
+                return True
+
+            return False
+
         a0 = param2address(self, T0_or_address)
         if a0.t is None or a0.segment_index is None:
             self.T2address(a0)
@@ -4895,7 +5293,7 @@ class Subpath(ContinuousCurve, MutableSequence):
         if a1.t is None or a1.segment_index is None:
             self.T2address(a1)
 
-        initial_orientation = (a0 > a1)
+        initial_orientation = subpath_greater_than(a0, a1)
 
         if a0.T == a1.T:
             raise ValueError("Subpath.cropped called with T0 == T1")
@@ -4910,7 +5308,7 @@ class Subpath(ContinuousCurve, MutableSequence):
             a1._segment_index = (a1._segment_index - 1) % len(self)
             a1._t = 1
 
-        if initial_orientation != (a0 > a1):
+        if initial_orientation != subpath_greater_than(a0, a1):
             raise ValueError("Subpath.cropped sees endpoints change place"
                              "after preprocessing; corner case?")
 
@@ -5366,7 +5764,7 @@ class Path(Curve, MutableSequence):
         Subpath.d(...) for more details.
         """
         op = {}
-        op.update(_d_string_params)
+        op.update(svgpathtools_d_string_params)
         op.update(options)
         op.update(kw)
         nonempty = [s for s in self if len(s) > 0]
@@ -5567,14 +5965,6 @@ class Path(Curve, MutableSequence):
         """
         a = param2address(self, W_or_address)
         return self[a.subpath_index][a.segment_index].unit_tangent(a.t)
-
-    def normal(self, W_or_address):
-        """
-        Given an address a or a value W, which is resolved to the default
-        address a, or given an address a, returns the right-hand rule unit
-        normal vector to self at a.
-        """
-        return - 1j * self.unit_tangent(W_or_address)
 
     def curvature(self, W_or_address):
         """
@@ -5867,7 +6257,7 @@ class Path(Curve, MutableSequence):
         return to_return
 
     def heuristic_crop(self, other_curve, crop_to_inside=True):
-        new_path = heuristic_crop(self, other_curve, crop_to_inside=crop_to_inside)
+        new_path = crop(self, other_curve, crop_to_inside=crop_to_inside)
         self.erase()
         self.extend(new_path)
 
@@ -5888,6 +6278,12 @@ class Path(Curve, MutableSequence):
             self[0].unset_Z()
             return self
         raise ValueError("ambiguous unset_Z command: more or less than one subpath")
+
+    def rotate_starting_segment_by(self, how_much):
+        if len(self) == 1:
+            self[0].rotate_starting_segment_by(how_much)
+            return self
+        raise ValueError("more than one subpath; cannot rotate starting segment")
 
     def converted_to_bezier(self, quality=0.01, safety=5,
                             reuse_segments=True):

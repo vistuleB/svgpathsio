@@ -4,7 +4,8 @@ Note: This file was taken (nearly) as is from the svg.path module (v 2.0)."""
 
 # External dependencies
 from __future__ import division, absolute_import, print_function
-from numbers import Complex, Real
+from .misctools import real_numbers_in, to_decimals
+from numbers    import Real
 import re
 
 # Internal dependencies
@@ -31,39 +32,34 @@ def _unpack_tokens(pathdef):
     for token in pathdef:
         if isinstance(token, str):
             if token not in COMMANDS:
+                print("token", token)
                 raise ValueError("unrecognized string token in svgpathtools.parser._unpack_tokens")
             yield token
+            continue
 
-        elif isinstance(token, Real):
-            yield float(token)
+        x, y = real_numbers_in(token)
+        yield x
+        if y is not None:
+            yield y
 
-        elif isinstance(token, Complex):
-            yield float(token.real)
-            yield float(token.imag)
 
-        else:
-            try:
-                try:
-                    x = float(token.x)
-                    y = float(token.y)
-                    yield x
-                    yield y
-                except AttributeError:
-                    raise ValueError
-            except ValueError:
-                try:
-                    try:
-                        try:
-                            x = float(token['x'])
-                            y = float(token['y'])
-                            yield x
-                            yield y
-                        except TypeError:
-                            raise ValueError
-                    except KeyError:
-                        raise ValueError
-                except ValueError:
-                    raise ValueError("unrecognized token in svgpathtools.parser._unpack_tokens")
+def generate_path(*args, decimals=None):
+    if len(args) == 0:
+        raise ValueError("empty args in generate_path")
+
+    if len(args) == 1 and isinstance(args[0], list):
+        tokens = args[0]
+
+    else:
+        tokens = args
+
+    def stringifier(thing):
+        if isinstance(thing, str):
+            return thing
+        assert isinstance(thing, Real)
+        return to_decimals(thing, decimals)
+
+    return " ".join(stringifier(c) for c in _unpack_tokens(tokens))
 
 
 # The following function returns a Subpath when it can, and otherwise, if
@@ -85,7 +81,7 @@ def parse_subpath(*args, accept_paths=False):
     else:
         elements = list(_unpack_tokens(args))
 
-    if not all(isinstance(x, str) or isinstance(x, float) for x in elements):
+    if not all(isinstance(x, str) or isinstance(x, Real) for x in elements):
         print("args:")
         print(args)
         print("elements:")
@@ -93,7 +89,8 @@ def parse_subpath(*args, accept_paths=False):
         assert False
 
     if len(elements) == 0:
-        raise ValueError("Empty token list in parse_subpath.")
+        # raise ValueError("Empty token list in parse_subpath.")
+        return Subpath()
 
     if isinstance(elements[0], float):
         elements.insert(0, 'M')
@@ -116,8 +113,10 @@ def parse_subpath(*args, accept_paths=False):
         nonlocal elements
         el = elements.pop()
         if isinstance(el, str):
+            print("el:", el)
+            print("elements:", elements)
             raise ValueError("string found in tokens when float expected")
-        assert isinstance(el, float)
+        assert isinstance(el, Real)
         return el
 
     while elements:
@@ -279,6 +278,8 @@ def parse_subpath(*args, accept_paths=False):
 
             subpath.append(Arc(current_pos, radius, rotation, arc, sweep, end))
             current_pos = end
+
+        
 
     if len(subpath) > 0:
         append_to_path(subpath)
