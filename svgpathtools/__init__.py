@@ -6,14 +6,14 @@ from .bezier import (
 )
 
 from .path import (
-    Path, Line, QuadraticBezier, CubicBezier, Arc,
+    Curve, Path, Line, QuadraticBezier, CubicBezier, Arc,
     Subpath, Segment, BezierSegment, bpoints2bezier,
     poly2bez, bbox2path, param2address, address2param,
     Address, ValueAddressPair, points2lines, points2polyline,
     points2polygon, bbox2path, crop, intersect_subpaths,
     bbox2subpath, intersect_paths, rounded_polygon,
     rounded_polyline, svgpathtools_d_string_params,
-    vanilla_cubic_interpolator
+    vanilla_cubic_interpolator, is_path_or_subpath
 )
 
 from .parser import (
@@ -22,7 +22,8 @@ from .parser import (
 
 from .transform_parser import (
     parse_transform, generate_transform, matrix_to_string,
-    svgpathtools_transform_params, normalize_transform
+    svgpathtools_transform_params, normalize_transform,
+    compound_translations
 )
 
 from .paths2svg import disvg, wsvg

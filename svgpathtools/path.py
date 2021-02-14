@@ -1,6 +1,7 @@
 """This submodule contains the class definitions of the the main five
 classes svgpathtools is built around: Path, Line, QuadraticBezier,
-CubicBezier, and Arc."""
+CubicBezier, and Arc. This sentence here was added to make sure git was
+workin."""
 
 # External dependencies
 from __future__ import division, absolute_import, print_function
@@ -38,10 +39,39 @@ from .polytools import \
 
 from .transform_parser import parse_transform
 
+# trig
+
+tau = 2 * pi
+eta = pi / 2
+
+
+def cos_deg(a):
+    z = a % 360
+    if z == 180:
+        return -1
+    elif z == 90 or z == 270:
+        return 0
+    elif z == 0:
+        return 1
+    return cos(radians(a))
+
+
+def sin_deg(a):
+    z = a % 360
+    if z == 180 or z == 0:
+        return 0
+    elif z == 90:
+        return 1
+    elif z == 270:
+        return -1
+    return sin(radians(a))
+
+
+def cis_deg(a):
+    return cos_deg(a) + 1j * sin_deg(a)
+
 
 # Default Parameters  ########################################################
-
-tau = 2 * pi  # courtesy M. Hartl
 
 # path segment .length() parameters for arc length computation
 LENGTH_MIN_DEPTH  = 5
@@ -346,6 +376,10 @@ def is_smooth_join(coming_from, going_to, wrt_parameterization=False):
     else:
         return going_to.start == coming_from.end and going_to.unit_tangent(
             0) == coming_from.unit_tangent(1)
+
+
+def is_path_or_subpath(thing):
+    return isinstance(thing, Path) or isinstance(thing, Subpath)
 
 
 # Segment counting, iteration  ###############################################
@@ -3037,6 +3071,7 @@ def extract_complex(thing):
         x = float(thing.x)
         y = float(thing.y)
         return x + 1j * y
+
     except AttributeError:
         pass
 
@@ -3351,11 +3386,10 @@ class CubicBezier(BezierSegment):
         self._field_names = ['start', 'control1', 'control2', 'end']
 
         # used to know if self._length needs to be updated
-        self._length_info = {'length': None, 'bpoints': None, 'error': None,
+        self._length_info = {'length': None,
+                             'bpoints': None,
+                             'error': None,
                              'min_depth': None}
-
-    # def shortname(self):
-    #     return 'cubic'
 
     def tweaked(self, start=None, control1=None, control2=None, end=None):
         start = start if start is not None else self._start
@@ -3363,6 +3397,14 @@ class CubicBezier(BezierSegment):
         control2 = control2 if control2 is not None else self._control2
         end = end if end is not None else self._end
         return CubicBezier(start, control1, control2, end)
+
+    def rotate_c1_by_angle(self, angle):
+        self._control1 = self._start + (self._control1 - self._start) * cis_deg(angle)
+        return self
+
+    def rotate_c2_by_angle(self, angle):
+        self._control2 = self._end + (self._control2 - self._end) * cis_deg(angle)
+        return self
 
     def can_use_S_from_previous(self, previous):
         if isinstance(previous, CubicBezier):

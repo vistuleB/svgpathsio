@@ -504,6 +504,11 @@ def complex_numbers_iterator(*args):
 
 
 def string_and_values_iterator(*args):
+    if len(args) == 1 and isinstance(args[0], list):
+        args = args[0]
+
+    args = list(args)
+
     def should_yield():
         if cur_string is not None or len(cur_values) > 0:
             assert cur_string is not None
@@ -515,7 +520,13 @@ def string_and_values_iterator(*args):
     cur_string = None
     cur_values = []
 
-    for thing in args:
+    index = -1
+    while True:
+        index += 1
+        if index >= len(args):
+            break
+        thing = args[index]
+
         if thing is None:
             continue
 
@@ -532,11 +543,31 @@ def string_and_values_iterator(*args):
                 print(f"{i}:", t)
             raise ValueError("string_and_values_iterator failed; see printout of args")
 
+        # thing is a string; maybe we have something to yield?
+
         if should_yield():
             yield cur_string, cur_values
 
-        cur_string = thing
-        cur_values = []
+        if '(' in thing:
+            start, end = thing.split('(', 1)
+            cur_string = start.strip()
+            assert cur_string is not None
+            assert len(cur_string) > 0
+            num_string, further = end.split(')', 1)
+            further = further.strip()
+            if len(further) > 0:
+                args.insert(index + 1, further)
+            tokens = num_string.replace(',', ' ').split()
+            try:
+                floats = [float(t) for t in tokens]
+            except ValueError:
+                raise
+            cur_values = [(int(z) if z == int(z) else z) for z in floats]
+
+        else:
+            cur_string = thing
+            cur_values = []
+            assert cur_string is not None
 
     if should_yield():
         yield cur_string, cur_values
