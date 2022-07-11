@@ -64,11 +64,9 @@ def generate_path(*args, decimals=None):
 
 # The following function returns a Subpath when it can, and otherwise, if
 # accept_paths is True, a Path. Does not accept an empty token list / spec.
-def parse_subpath(*args, accept_paths=False):
+def parse_subpath(*args, accept_paths=False, auto_add_M=False):
     # In the SVG specs, initial movetos are absolute, even if
     # specified as 'm'. This is the default behavior here as well.
-    # But if you pass in a current_pos variable, the initial moveto
-    # will be relative to that current_pos. This is useful.
     if len(args) == 0:
         raise ValueError("empty args in parse_subpath")
 
@@ -81,18 +79,18 @@ def parse_subpath(*args, accept_paths=False):
     else:
         elements = list(_unpack_tokens(args))
 
-    if not all(isinstance(x, str) or isinstance(x, Real) for x in elements):
-        print("args:")
-        print(args)
-        print("elements:")
-        print(elements)
+    if any(not isinstance(x, str) and not isinstance(x, Real) for x in elements):
+        print("args:", args)
+        print("elements:", elements)
         assert False
 
     if len(elements) == 0:
         # raise ValueError("Empty token list in parse_subpath.")
         return Subpath()
 
-    if isinstance(elements[0], float):
+    if isinstance(elements[0], Real):
+        if not auto_add_M:
+            raise ValueError("path not starting with 'M' or 'm' (use auto_add_M flag if desired)")
         elements.insert(0, 'M')
 
     # Reverse for easy use of .pop()
@@ -131,7 +129,7 @@ def parse_subpath(*args, accept_paths=False):
             # If this element starts with numbers, it is an implicit command
             # and we don't change the command. Check that it's allowed:
             if command is None:
-                raise ValueError("Missing command after 'Z' in parse_subpath.")
+                raise ValueError("Missing command after 'Z'")
 
         if command == 'M':
             # Moveto command.
@@ -279,8 +277,6 @@ def parse_subpath(*args, accept_paths=False):
             subpath.append(Arc(current_pos, radius, rotation, arc, sweep, end))
             current_pos = end
 
-        
-
     if len(subpath) > 0:
         append_to_path(subpath)
         subpath = Subpath()
@@ -298,7 +294,7 @@ def parse_subpath(*args, accept_paths=False):
     return path
 
 
-def parse_path(*args, accept_paths=None):
+def parse_path(*args, auto_add_M=False):
     """
     Parses a path from a single string or from a list of tokens. The 'accept_paths'
     option is accepted here for uniformity with 'parse_subpath', but it has no
@@ -316,7 +312,7 @@ def parse_path(*args, accept_paths=None):
 
     (Etc.)
     """
-    s = parse_subpath(*args, accept_paths=True)
+    s = parse_subpath(*args, accept_paths=True, auto_add_M=auto_add_M)
 
     if isinstance(s, Subpath):
         s = Path(s)

@@ -294,6 +294,10 @@ class Rgba(RgbaAncestor):
             self.a if a is None else a
         )
 
+    def with_opacity(self, amt):
+        assert 0 <= amt <= 1
+        return Rgba(self.r, self.g, self.b, amt * 255)
+
     def as_stop(self):
         return f'stop-color={self.rgb_str()}.stop-opacity={(self.a / 255):.2f}'
 
@@ -346,16 +350,22 @@ def to_decimals(value, decimals):
     if decimals is None:
         return str(value)
 
-    to_places = f"{value:.{decimals}f}"
-    assert '.' in to_places
-    while to_places[-1] == '0':
-        to_places = to_places[:-1]
+    string = f'{value:.{decimals}f}'
+    assert '.' in string
+    
+    while string.endswith('0'):
+        string = string[:-1]
 
-    if to_places[-1] == '.':
-        to_places = to_places[:-1]
+    if string.endswith('.'):
+        string = string[:-1]
 
-    assert len(to_places) > 0
-    return to_places
+    assert len(string) > 0
+    return string
+
+
+def int_else_float(z):
+    z = float(z)
+    return int(z) if int(z) == z else z
 
 
 def list2complex(thing):
@@ -376,14 +386,17 @@ def real_numbers_in(thing):
 
     def last_minute_changes():
         nonlocal x, y
+
         if not isinstance(x, Real):
             raise ValueError("expecting real numbers in real_numbers_in")
+
+        if y is not None and not isinstance(y, Real):
+            raise ValueError("expecting real numbers in real_numbers_in (2)")
+        
         if x == int(x):
             x = int(x)
 
         if y is not None and y == int(y):
-            if not isinstance(y, Real):
-                raise ValueError("expecting real numbers in real_numbers_in (2)")
             y = int(y)
 
         return x, y
@@ -503,76 +516,6 @@ def complex_numbers_iterator(*args):
         raise ValueError("odd number of reals in complex_numbers_iterator")
 
 
-def string_and_values_iterator(*args):
-    if len(args) == 1 and isinstance(args[0], list):
-        args = args[0]
-
-    args = list(args)
-
-    def should_yield():
-        if cur_string is not None or len(cur_values) > 0:
-            assert cur_string is not None
-            assert len(cur_values) > 0
-            assert all(isinstance(x, Real) for x in cur_values)
-            return True
-        return False
-
-    cur_string = None
-    cur_values = []
-
-    index = -1
-    while True:
-        index += 1
-        if index >= len(args):
-            break
-        thing = args[index]
-
-        if thing is None:
-            continue
-
-        try:
-            x, y = real_numbers_in(thing)
-            cur_values.extend([t for t in (x, y) if t is not None])
-            continue
-
-        except ValueError:
-            pass
-
-        if not isinstance(thing, str):
-            for i, t in enumerate(args):
-                print(f"{i}:", t)
-            raise ValueError("string_and_values_iterator failed; see printout of args")
-
-        # thing is a string; maybe we have something to yield?
-
-        if should_yield():
-            yield cur_string, cur_values
-
-        if '(' in thing:
-            start, end = thing.split('(', 1)
-            cur_string = start.strip()
-            assert cur_string is not None
-            assert len(cur_string) > 0
-            num_string, further = end.split(')', 1)
-            further = further.strip()
-            if len(further) > 0:
-                args.insert(index + 1, further)
-            tokens = num_string.replace(',', ' ').split()
-            try:
-                floats = [float(t) for t in tokens]
-            except ValueError:
-                raise
-            cur_values = [(int(z) if z == int(z) else z) for z in floats]
-
-        else:
-            cur_string = thing
-            cur_values = []
-            assert cur_string is not None
-
-    if should_yield():
-        yield cur_string, cur_values
-
-
 # stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
 def hex2rgb(value):
     """Converts a hexadeximal color string to an RGB 3-tuple
@@ -689,3 +632,4 @@ BugException = Exception("This code should never be reached.  You've found a "
                          "bug.  Please submit an issue to \n"
                          "https://github.com/mathandy/svgpathtools/issues"
                          "\nwith an easily reproducible example.")
+

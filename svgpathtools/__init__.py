@@ -13,7 +13,8 @@ from .path import (
     points2polygon, bbox2path, crop, intersect_subpaths,
     bbox2subpath, intersect_paths, rounded_polygon,
     rounded_polyline, svgpathtools_d_string_params,
-    vanilla_cubic_interpolator, is_path_or_subpath
+    vanilla_cubic_interpolator, is_path_or_subpath,
+    custom_x_y_to_x_y_transform, x_val_cut, heuristic_has_point_outside
 )
 
 from .parser import (
@@ -21,9 +22,13 @@ from .parser import (
 )
 
 from .transform_parser import (
-    parse_transform, generate_transform, matrix_to_string,
-    svgpathtools_transform_params, normalize_transform,
-    compound_translations
+    parse_transform, 
+    generate_transform, 
+    matrix_to_string,
+    normalize_transform_translation_rightmost,
+    generate_transform_if_not_already_string, 
+    compound_translations,
+    is_svg_matrix
 )
 
 from .paths2svg import disvg, wsvg
@@ -32,10 +37,10 @@ from .polytools import polyroots, polyroots01, rational_limit, real, imag
 
 from .misctools import (
     hex2rgb, rgb2hex, rgb012hex, rgb_affine_combination,
-    open_in_browser, string_and_values_iterator,
+    open_in_browser, int_else_float,
     values_iterator, HtmlColors, HtmlColorsLowerCase,
     random_color, Rgba, RgbaDif, real_numbers_in,
-    complex_numbers_iterator, is_css_color
+    complex_numbers_iterator, is_css_color, to_decimals
 )
 
 from .smoothing import smoothed_path, smoothed_joint, is_differentiable, kinks

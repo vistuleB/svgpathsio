@@ -23,23 +23,16 @@ def polyroots(p, realroots=False, condition=lambda r: True):
     OUTPUT:
     A list containing the roots of the polynomial.
     NOTE:  This uses np.isclose and np.roots"""
-    roots = np.roots(p)
-    if realroots:
-        roots = [r.real for r in roots if isclose(r.imag, 0)]
+    roots = [r.real for r in np.roots(p) if isclose(r.imag, 0)] if realroots else np.roots(p)
     roots = [r for r in roots if condition(r)]
-
-    duplicates = []
-    for idx, (r1, r2) in enumerate(combinations(roots, 2)):
-        if isclose(r1, r2):
-            duplicates.append(idx)
-    return [r for idx, r in enumerate(roots) if idx not in duplicates]
+    return [r for i, r in enumerate(roots) if not any(isclose(s, r) for s in roots[:i])]
 
 
 def polyroots01(p):
     """Returns the real roots between 0 and 1 of the polynomial with
     coefficients given in p,
       p[0] * x**n + p[1] * x**(n-1) + ... + p[n-1]*x + p[n]
-    p can also be a np.poly1d object.  See polyroots for more information."""
+    p can also be a np.poly1d object. See polyroots for more information."""
     return polyroots(p, realroots=True, condition=lambda tval: 0 <= tval <= 1)
 
 

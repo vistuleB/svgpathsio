@@ -6,6 +6,7 @@ points given by their standard representation."""
 # External dependencies:
 from __future__ import division, absolute_import, print_function
 from math import factorial as fac, ceil, log, sqrt
+from numbers import Real
 from numpy import poly1d
 
 # Internal dependencies
@@ -251,9 +252,9 @@ class ApproxSolutionSet(list):
                 return True
         return False
 
-    def appadd(self, pt):
-        if pt not in self:
-            self.append(pt)
+    # def appadd(self, pt):
+    #     if pt not in self:
+    #         self.append(pt)
 
 
 class BPair(object):
@@ -262,6 +263,20 @@ class BPair(object):
         self.bez2 = bez2
         self.t1 = t1  # t value to get the mid point of this curve from cub1
         self.t2 = t2  # t value to get the mid point of this curve from cub2
+
+
+def bezier_x_value_intersections(bezier, x_val):
+    assert isinstance(x_val, Real)
+    assert len(bezier) > 1
+    assert any(p != bezier[0] for p in bezier)
+    return polyroots01(bezier2polynomial([p.real - x_val for p in bezier]))
+
+
+def bezier_y_value_intersections(bezier, y_val):
+    assert isinstance(y_val, Real)
+    assert len(bezier) > 1
+    assert any(p != bezier[0] for p in bezier)
+    return polyroots01(bezier2polynomial([p.imag - y_val for p in bezier]))
 
 
 def bezier_by_line_intersections(bezier, line):
@@ -273,12 +288,9 @@ def bezier_by_line_intersections(bezier, line):
     # After this transformation, the intersection points are the real roots of
     # the imaginary component of the bezier for which the real component is
     # between 0 and abs(line[1]-line[0])].
-    assert len(line[:]) == 2
+    assert any(p != bezier[0] for p in bezier)
+    assert len(line) == 2   # (used to be line[:])
     assert line[0] != line[1]
-    if not any(p != bezier[0] for p in bezier):
-        raise ValueError("bezier is nodal, use "
-                         "bezier_by_line_intersection(bezier[0], line) "
-                         "instead for a bool to be returned.")
 
     # First let's shift the complex plane so that line starts at the origin
     shifted_bezier = [z - line[0] for z in bezier]
@@ -286,19 +298,15 @@ def bezier_by_line_intersections(bezier, line):
     line_length = abs(shifted_line_end)
 
     # Now let's rotate the complex plane so that line falls on the x-axis
-    rotation_matrix = line_length / shifted_line_end
-    transformed_bezier = [rotation_matrix * z for z in shifted_bezier]
+    rotation_multiplier = line_length / shifted_line_end
+    transformed_bezier = [rotation_multiplier * z for z in shifted_bezier]
 
     # Now all intersections should be roots of the imaginary component of
     # the transformed bezier
-    transformed_bezier_imag = [p.imag for p in transformed_bezier]
-    coeffs_y = bezier2polynomial(transformed_bezier_imag)
-    roots_y = list(polyroots01(coeffs_y))  # returns real roots 0 <= r <= 1
-
-    transformed_bezier_real = [p.real for p in transformed_bezier]
+    roots = polyroots01(bezier2polynomial([p.imag for p in transformed_bezier]))
     intersection_list = []
-    for bez_t in set(roots_y):
-        xval = bezier_point(transformed_bezier_real, bez_t)
+    for bez_t in roots:
+        xval = bezier_point(transformed_bezier, bez_t).real
         if 0 <= xval <= line_length:
             line_t = xval / line_length
             intersection_list.append((bez_t, line_t))
