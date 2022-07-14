@@ -364,42 +364,18 @@ def to_decimals(value, decimals):
 
 
 def int_else_float(z):
+    assert isinstance(z, Real)
     z = float(z)
     return int(z) if int(z) == z else z
-
-
-def list2complex(thing):
-    if not isinstance(thing, list):
-        raise ValueError("list2complex expecting list")
-
-    if len(thing) == 1:
-        return complex(thing[0])
-
-    if len(thing) == 2:
-        return complex(thing[0], thing[1])
-
-    raise ValueError("expecting list with 1 or 2 elements in list2complex")
 
 
 def real_numbers_in(thing):
     y = None
 
     def last_minute_changes():
-        nonlocal x, y
-
-        if not isinstance(x, Real):
-            raise ValueError("expecting real numbers in real_numbers_in")
-
-        if y is not None and not isinstance(y, Real):
-            raise ValueError("expecting real numbers in real_numbers_in (2)")
-        
-        if x == int(x):
-            x = int(x)
-
-        if y is not None and y == int(y):
-            y = int(y)
-
-        return x, y
+        to_return_x = int_else_float(x)
+        to_return_y = y if y is None else int_else_float(y)
+        return to_return_x, to_return_y
 
     if isinstance(thing, str):
         try:
@@ -495,25 +471,6 @@ def real_numbers_in(thing):
         raise ValueError
 
     assert False
-
-
-def values_iterator(*args):
-    for thing in args:
-        x, y = real_numbers_in(thing)
-        yield x
-        if y is not None:
-            yield y
-
-
-def complex_numbers_iterator(*args):
-    for i, v in enumerate(values_iterator(*args)):
-        if i % 2 == 0:
-            x = v
-        else:
-            yield complex(x, v)
-        i += 1
-    if i % 2 == 1:
-        raise ValueError("odd number of reals in complex_numbers_iterator")
 
 
 # stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
@@ -628,8 +585,5 @@ def open_in_browser(file_location):
         print("got an error")
 
 
-BugException = Exception("This code should never be reached.  You've found a "
-                         "bug.  Please submit an issue to \n"
-                         "https://github.com/mathandy/svgpathtools/issues"
-                         "\nwith an easily reproducible example.")
+BugException = Exception("This code should never be reached. You've found a bug.")
 

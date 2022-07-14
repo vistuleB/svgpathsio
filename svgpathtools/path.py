@@ -7,14 +7,11 @@ workin."""
 from __future__ import division, absolute_import, print_function
 from itertools import chain
 
-from math import \
-    sqrt, cos, sin, degrees, radians, log, pi, tan, atan2, floor, ceil
+from math import sqrt, cos, sin, degrees, radians, log, pi, tan, atan2, floor, ceil
 from cmath import exp, phase
-import re
 from warnings import warn
-from operator import itemgetter
 from collections import MutableSequence
-from numbers import Complex, Number, Real
+from numbers import Number, Real
 import numpy as np
 
 try:
@@ -33,8 +30,7 @@ from .bezier import \
     bezier_by_line_intersections, \
     polynomial2bezier, bezier2polynomial
 
-from .misctools import \
-    BugException, complex_numbers_iterator, real_numbers_in
+from .misctools import BugException, real_numbers_in
 
 from .polytools import \
     rational_limit, polyroots, polyroots01, imag, real
@@ -71,6 +67,12 @@ def sin_deg(a):
 
 def cis_deg(a):
     return cos_deg(a) + 1j * sin_deg(a)
+
+
+def list_reals_to_list_complex(list_reals):
+    assert len(list_reals) % 2 == 0
+    assert all(isinstance(x, Real) for x in list_reals)
+    return [complex(x, y) for (x, y) in zip(list_reals[::2], list_reals[1::2])]
 
 
 # Default Parameters  ########################################################
@@ -246,7 +248,7 @@ def rounded_corner_constructor(a, b, c, r, invert_corner=False):
 
 
 def rounded_polyline(*args, radius=None, invert_corners=False, split_arcs=False):
-    corners = list(complex_numbers_iterator(*args))
+    corners = list_reals_to_list_complex(*args)
 
     data = []
     for a, b, c in zip(corners, corners[1:], corners[2:]):
@@ -294,7 +296,7 @@ def rounded_polygon(*args, radius=None):
     if radius is None:
         raise ValueError("radius argument missing")
 
-    corners = list(complex_numbers_iterator(*args))
+    corners = list_reals_to_list_complex(*args)
 
     if corners[0] != corners[-1]:
         corners.append(corners[0])
@@ -332,7 +334,7 @@ def reflect_complex_through(c, direction):
 
 
 def vanilla_cubic_interpolator(*args, z=0.37):
-    points = list(complex_numbers_iterator(*args))
+    points = list_reals_to_list_complex(*args)
 
     if len(points) <= 1:
         raise ValueError("not enough points in vanilla_cubic_interpolator")
@@ -710,13 +712,13 @@ def translate(curve, x, y=None):
     # above, but since translations are common, and since general Arc transforms are
     # slow-ish, we do things from scratch
     if y is None: 
-        if isinstance(x, Number):
+        if isinstance(x, Real):
             y = 0
             
         else:
             x, y = real_numbers_in(x)
-            assert isinstance(x, Real) and isinstance(y, Real)
 
+    assert isinstance(x, Real) and isinstance(y, Real)
     z = x + 1j * y
 
     if isinstance(curve, Path):
@@ -764,11 +766,10 @@ def bezier_unit_tangent(seg, t):
     def compute_error_message(place):
         bef = seg.poly().deriv()(t - 1e-4)
         aft = seg.poly().deriv()(t + 1e-4)
-        mes = ("thrown at %s in bezier_unit_tangent:" % place +
-               "unit tangent appears to not be well-defined at " +
-               "t = {},\n".format(t) +
-               "seg.poly().deriv()(t - 1e-4) = {}\n".format(bef) +
-               "seg.poly().deriv()(t + 1e-4) = {}".format(aft))
+        mes = (f"thrown at {place} in bezier_unit_tangent:" +
+               f"unit tangent appears to not be well-defined at t = {t},\n" +
+               f"seg.poly().deriv()(t - 1e-4) = {bef}\n" +
+               f"seg.poly().deriv()(t + 1e-4) = {aft}")
         return mes
 
     def normalize(thing):
@@ -831,9 +832,10 @@ def bezier_radialrange(seg, origin, return_all_global_extrema=False):
 
     if return_all_global_extrema:
         raise NotImplementedError
+
     else:
-        seg_global_min = min(extrema, key=itemgetter(0))
-        seg_global_max = max(extrema, key=itemgetter(0))
+        seg_global_min = min(extrema, key=(lambda x: x[0]))
+        seg_global_max = max(extrema, key=(lambda x: x[0]))
         return seg_global_min, seg_global_max
 
 
@@ -921,12 +923,10 @@ def inv_arclength(curve, s, s_tol=ILENGTH_S_TOL, maxits=ILENGTH_MAXITS,
                 t_upper = t
 
             if t_upper == t_lower:
-                warn("t is as close as a float can be to the correct value, "
-                     "but |s(t) - s| = {} > s_tol".format(abs(s_t - s)))
+                warn(f"t is as close as a float can be to the correct value, but |s(t) - s| = {abs(s_t - s)} > s_tol")
                 return Address(t=t)
 
-        raise Exception("Maximum iterations reached with s(t) - s = {}."
-                        "".format(s_t - s))
+        raise Exception(f"Maximum iterations reached with s(t) - s = {s_t - s}.")
 
     elif isinstance(curve, Subpath):
         seg_lengths = [
@@ -1387,9 +1387,8 @@ def intersect_subpaths(s1, s2):
 
         assert len(oriented_pieces) > 0
 
-        if not all(np.isclose(p.end, q.start) for p, q in zip(oriented_pieces,
-                                                              oriented_pieces[1:])):
-            raise BugException("You thought it would be that easy? Whu-ah-ah-ah-ah-ah!!!! (1)")
+        if not all(np.isclose(p.end, q.start) for p, q in zip(oriented_pieces, oriented_pieces[1:])):
+            raise ValueError("You thought it would be that easy? Whu-ah-ah-ah-ah-ah!!!! (1)")
 
         if not np.isclose(
             oriented_pieces[0].start,
@@ -2176,9 +2175,8 @@ def _load_repr_options_for(shortname):
     return to_return
 
 
-def _parse_repr_options(shortname, options):
+def _parse_repr_options(shortname, options, give_details=False):
     def print_lists(msg):
-        return
         print(msg + ":")
         for l in lists:
             print("  ", l)
@@ -2206,19 +2204,21 @@ def _parse_repr_options(shortname, options):
     options = options.replace(',', ' ')
 
     # turn options into lists
-    options_list = [o for o in options.split() if o != '']
+    options_list = options.split()
+    assert '' not in options_list
     lists = [o.split('.') for o in options_list]
-    print_lists("original lists")
+    if give_details:
+        print_lists("original lists")
 
     # remove options targeting other objects
-    lists = [o for o in lists if shortname in o or
-             all(e not in o for e in extraneous_qualifiers)]
-    print_lists("lists after keeping only {}-relevant options"
-                .format(shortname))
+    lists = [o for o in lists if any(x in o for x in relevant_qualifiers)]
+    if give_details:
+        print_lists(f"lists after keeping only {shortname}-relevant options")
 
     # removing extraneous qualifiers:
     lists = [[e for e in o if e not in extraneous_qualifiers] for o in lists]
-    print_lists("lists after purging extraneous qualifiers")
+    if give_details:
+        print_lists("lists after purging extraneous qualifiers")
 
     # create list of used keys, and normalize missing values to 'true':
     keys = []
@@ -2252,7 +2252,8 @@ def _parse_repr_options(shortname, options):
 
         keys.append(o[:val_index])
 
-    print_lists(f"lists after adding default 'true' fields")
+    if give_details:
+        print_lists(f"lists after adding default 'true' fields")
 
     # remove keys whose specializations already exist
     indices_to_delete = []
@@ -2280,7 +2281,8 @@ def _parse_repr_options(shortname, options):
         del lists[index]
         last_deleted = index
 
-    print_lists(f"lists after purging superceded keys")
+    if give_details:
+        print_lists(f"lists after purging superceded keys")
 
     # now we can pop shortname or 'segment' from lists
     for o in lists:
@@ -2294,7 +2296,8 @@ def _parse_repr_options(shortname, options):
         assert len(o) == 2
         assert o[0] in _repr_option_names
 
-    print_lists(f"lists after popping shortname, 'segment'")
+    if give_details:
+        print_lists(f"lists after popping shortname, 'segment'")
 
     # parse the second (last) coordinate of each list
     for o in lists:
@@ -3068,10 +3071,10 @@ class BezierSegment(Segment):
         if isinstance(self, QuadraticBezier):
             return QuadraticBezier(*bpoints1), QuadraticBezier(*bpoints2)
 
-        elif isinstance(self, CubicBezier):
+        if isinstance(self, CubicBezier):
             return CubicBezier(*bpoints1), CubicBezier(*bpoints2)
 
-        raise BugException
+        assert False
 
     def cropped(self, t0_or_address, t1_or_address):
         """returns a cropped copy of the segment which starts at
@@ -3525,8 +3528,7 @@ class CubicBezier(BezierSegment):
                     3 * (self._control1 - self._control2) +
                     self._end)))
 
-    def length(self, t0=0, t1=1, error=LENGTH_ERROR,
-               min_depth=LENGTH_MIN_DEPTH):
+    def length(self, t0=0, t1=1, error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
         """
         Calculate the length of the path up to a certain position
         """
@@ -4626,18 +4628,14 @@ class Subpath(ContinuousCurve, MutableSequence):
             self._segments.insert(start_index, seg)
 
         if not is_empty_insert:
-            if prev is not None and \
-               prev.end != value.start:
-                if not bridge_discontinuity:
-                    raise BugException
+            if prev is not None and prev.end != value.start:
+                assert bridge_discontinuity
 
                 bridge = Line(prev.end, value.start)
                 self._segments.insert(start_index, bridge)
 
-            if next is not None and \
-               next.start != value.end:
-                if not bridge_discontinuity:
-                    raise BugException
+            if next is not None and next.start != value.end:
+                assert bridge_discontinuity
 
                 self._segments.insert(start_index + len(value), Line(value.end, next.start))
 
@@ -4838,12 +4836,11 @@ class Subpath(ContinuousCurve, MutableSequence):
             value = op[key]
 
             if not isinstance(value, str):
-                raise ValueError("expecting a string for option {};".format(key))
+                raise ValueError(f"expecting a string for option {key};")
 
             stripped = value.strip(' ')
             if stripped not in ['', ',']:
-                raise ValueError(f"option '{key}' contains non-whitespace-"
-                                 f"-or-comma, or more than one comma")
+                raise ValueError(f"option '{key}' contains non-whitespace-f-or-comma, or more than one comma")
 
             if key in _d_string_must_be_pure_spaces_params and stripped != '':
                 raise ValueError(f"option '{key}' containing non-spaces")

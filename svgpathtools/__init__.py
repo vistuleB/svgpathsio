@@ -10,7 +10,7 @@ from .path import (
     Subpath, Segment, BezierSegment, bpoints2bezier,
     poly2bez, bbox2path, param2address, address2param,
     Address, ValueAddressPair, points2lines, points2polyline,
-    points2polygon, bbox2path, crop, intersect_subpaths,
+    points2polygon, crop, intersect_subpaths,
     bbox2subpath, intersect_paths, rounded_polygon,
     rounded_polyline, svgpathtools_d_string_params,
     vanilla_cubic_interpolator, is_path_or_subpath,
