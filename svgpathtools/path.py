@@ -366,22 +366,6 @@ def vanilla_cubic_interpolator(*args, z=0.37):
 # Miscellaneous  #############################################################
 
 
-def is_smooth_join(coming_from, going_to, wrt_parameterization=False):
-    """
-    Checks if coming_from path / subpath / segment joins smoothly with
-    going_to path / subpath / segment.  By default, this only checks that
-    going_to starts moving (at t=0) in the same direction (and from the same
-    positive) as coming_from stopped moving (at t=1).  To check if the tangent
-    magnitudes also match, set wrt_parameterization=True.
-    """
-    if wrt_parameterization:
-        return going_to.start == coming_from.end and going_to.derivative(
-            0) == coming_from.derivative(1)
-    else:
-        return going_to.start == coming_from.end and going_to.unit_tangent(
-            0) == coming_from.unit_tangent(1)
-
-
 def is_path_or_subpath(thing):
     return isinstance(thing, Path) or isinstance(thing, Subpath)
 
@@ -2553,14 +2537,6 @@ class Curve(object):
                  error=ILENGTH_ERROR, min_depth=ILENGTH_MIN_DEPTH):
         """Returns point at arclength s from start of curve."""
         return self.point(self.ilength(s, s_tol=s_tol, maxits=maxits, error=error, min_depth=min_depth))
-
-    def joins_smoothly_with(self, previous, wrt_parameterization=False):
-        """Checks if this curve joins smoothly with (Curve) previous.
-        By default, this only checks that this curve starts moving
-        (at W/T/t=0) in the same direction (and from the same positive) as
-        previous stopped moving (at W/T/t=1). To check if the tangent
-        magnitudes also match, set wrt_parameterization=True."""
-        return is_smooth_join(previous, self, wrt_parameterization)
 
     def closest_point_to(self, pt):
         """returns a pair (d_min, address_min) where d_min minimizes

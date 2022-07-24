@@ -367,7 +367,7 @@ def turn_svg_transform_attribute_into_transform_tokens(string):
         for regex, replacement in replacement_compactifier_pairs.items():
             compactified = regex.sub(replacement, compactified)
 
-        string_tokens = list(t for t in re.split('[ ,]', compactified) if t != '')
+        string_tokens = list(float(t) for t in re.split('[ ,]', compactified) if t != '')
         number_tokens = [int_else_float(t) for t in string_tokens]
 
         assert len(number_tokens) in allowable[last_command]

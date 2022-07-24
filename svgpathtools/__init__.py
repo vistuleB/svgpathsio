@@ -22,7 +22,7 @@ from .parser import (
 )
 
 from .transform_parser import (
-    parse_transform, 
+    parse_transform,
     generate_transform, 
     matrix_to_string,
     normalize_transform_translation_rightmost,
@@ -31,25 +31,12 @@ from .transform_parser import (
     is_svg_matrix
 )
 
-from .paths2svg import disvg, wsvg
-
 from .polytools import polyroots, polyroots01, rational_limit, real, imag
 
 from .misctools import (
     hex2rgb, rgb2hex, rgb012hex, rgb_affine_combination,
     open_in_browser, int_else_float,
-    values_iterator, HtmlColors, HtmlColorsLowerCase,
+    HtmlColors, HtmlColorsLowerCase,
     random_color, Rgba, RgbaDif, real_numbers_in,
-    complex_numbers_iterator, is_css_color, to_decimals
-)
-
-from .smoothing import smoothed_path, smoothed_joint, is_differentiable, kinks
-
-from .svg_to_paths import svg2paths, svg2paths2
-
-from .document import Document, SVG_NAMESPACE
-
-from .svg_io_sax import (
-    SaxDocument, PathAndAttributes, TextAndAttributes,
-    DotAndAttributes, new_style, GlorifiedDictionary
+    is_css_color, to_decimals
 )

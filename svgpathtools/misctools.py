@@ -365,7 +365,6 @@ def to_decimals(value, decimals):
 
 def int_else_float(z):
     assert isinstance(z, Real)
-    z = float(z)
     return int(z) if int(z) == z else z
 
 
