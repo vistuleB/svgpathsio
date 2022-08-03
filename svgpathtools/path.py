@@ -11,7 +11,7 @@ from math import sqrt, cos, sin, degrees, radians, log, pi, tan, atan2, floor, c
 from cmath import exp, phase
 from warnings import warn
 from collections import MutableSequence
-from numbers import Number, Real
+from numbers import Complex, Number, Real
 import numpy as np
 
 try:
@@ -23,19 +23,19 @@ except ImportError:
 
 
 # Internal dependencies
-from .bezier import \
+from svgpathtools.bezier import \
     bezier_intersections, split_bezier, \
     bezier_x_value_intersections, bezier_y_value_intersections, \
     bezier_xbox, bezier_ybox, \
     bezier_by_line_intersections, \
     polynomial2bezier, bezier2polynomial
 
-from .misctools import BugException, real_numbers_in
+from svgpathtools.misctools import BugException, real_numbers_in
 
-from .polytools import \
+from svgpathtools.polytools import \
     rational_limit, polyroots, polyroots01, imag, real
 
-from .transform_parser import parse_transform
+from svgpathtools.transform_parser import parse_transform
 
 # trig
 
@@ -6286,7 +6286,7 @@ class Path(Curve, MutableSequence):
             subpath.rotate(degs, origin)
         return self
 
-    def translate(self, x, y=0):
+    def translate(self, x, y=None):
         for subpath in self:
             subpath.translate(x, y)
         return self

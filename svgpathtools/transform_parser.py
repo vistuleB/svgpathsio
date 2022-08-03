@@ -101,7 +101,7 @@ def arrays_are_close(a, b):
 
 
 def __normalize_transform_translation_rightmost(*args):
-    pairs = [{'type': command, 'values': values} for command, values in string_and_values_iterator(*args)]
+    pairs = [{'type': command, 'values': values} for command, values in string_and_values_iterator(args)]
     translation = 0
     while any(x['type'] == 'translate' for x in pairs):
         if pairs[-1]['type'] == 'translate':
@@ -157,7 +157,7 @@ def __normalize_transform_translation_rightmost(*args):
 
 
 def normalize_transform_translation_rightmost(*args):
-    tokens, translation = __normalize_transform_translation_rightmost
+    tokens, translation = __normalize_transform_translation_rightmost(*args)
     if translation != 0:
         tokens.append('translate')
         tokens.append(translation)
@@ -165,7 +165,7 @@ def normalize_transform_translation_rightmost(*args):
 
 
 def compound_translations(*args):
-    pairs = [{'type': command, 'values': values} for command, values in string_and_values_iterator(*args)]
+    pairs = [{'type': command, 'values': values} for command, values in string_and_values_iterator(args)]
     for i in range(len(pairs) - 2, -1, -1):
         p = pairs[i]
         if p['type'] != 'translate':
@@ -510,7 +510,10 @@ def string_and_values_iterator(tokens):
     command = None
     values = []
 
-    for i, t in enumerate(tokens):
+    def process_real_or_string_token(t):
+        nonlocal command
+        nonlocal values
+
         if isinstance(t, str):
             if command is not None:
                 assert len(values) in allowable[command]
@@ -521,15 +524,23 @@ def string_and_values_iterator(tokens):
             else:
                 assert len(values) == 0
                 command = t
-                assert command is not None
-                continue
 
         elif isinstance(t, Real):
             assert command is not None
             values.append(t)
 
         else:
+            print("type(t)", type(t))
+            print("t: ", t)
             assert False
+
+    for t in tokens:
+        if isinstance(t, list):
+            for q in t:
+                yield from process_real_or_string_token(q)
+        
+        else:
+            yield from process_real_or_string_token(t)
 
     if command is not None:
         if len(values) not in allowable[command]:
