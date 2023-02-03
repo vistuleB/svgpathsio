@@ -10,8 +10,8 @@ from itertools import chain
 from math import sqrt, cos, sin, degrees, radians, log, pi, tan, atan2, floor, ceil
 from cmath import exp, phase
 from warnings import warn
-from collections import MutableSequence
-from numbers import Complex, Number, Real
+from collections.abc import MutableSequence
+from numbers import Number, Real
 import numpy as np
 
 try:
@@ -30,7 +30,7 @@ from svgpathtools.bezier import \
     bezier_by_line_intersections, \
     polynomial2bezier, bezier2polynomial
 
-from svgpathtools.misctools import BugException, real_numbers_in
+from svgpathtools.misctools import BugException, real_numbers_in, real_numbers_in_iterator
 
 from svgpathtools.polytools import \
     rational_limit, polyroots, polyroots01, imag, real
@@ -69,10 +69,17 @@ def cis_deg(a):
     return cos_deg(a) + 1j * sin_deg(a)
 
 
-def list_reals_to_list_complex(list_reals):
+def real_args_to_complex_args(*args):
+    list_reals = [x for x in real_numbers_in_iterator(*args)]
     assert len(list_reals) % 2 == 0
     assert all(isinstance(x, Real) for x in list_reals)
     return [complex(x, y) for (x, y) in zip(list_reals[::2], list_reals[1::2])]
+
+
+# def list_reals_to_list_complex(list_reals):
+#     assert len(list_reals) % 2 == 0
+#     assert all(isinstance(x, Real) for x in list_reals)
+#     return [complex(x, y) for (x, y) in zip(list_reals[::2], list_reals[1::2])]
 
 
 # Default Parameters  ########################################################
@@ -248,7 +255,7 @@ def rounded_corner_constructor(a, b, c, r, invert_corner=False):
 
 
 def rounded_polyline(*args, radius=None, invert_corners=False, split_arcs=False):
-    corners = list_reals_to_list_complex(*args)
+    corners = real_args_to_complex_args(*args)
 
     data = []
     for a, b, c in zip(corners, corners[1:], corners[2:]):
@@ -296,7 +303,7 @@ def rounded_polygon(*args, radius=None):
     if radius is None:
         raise ValueError("radius argument missing")
 
-    corners = list_reals_to_list_complex(*args)
+    corners = real_args_to_complex_args(*args)
 
     if corners[0] != corners[-1]:
         corners.append(corners[0])
@@ -326,6 +333,8 @@ def rounded_polygon(*args, radius=None):
                             sweep=next_sweep,
                             end=next_e2))
 
+    print("END OF ROUNDED_POLYGON")
+
     return Path(Subpath(*segments).set_Z())
 
 
@@ -334,7 +343,8 @@ def reflect_complex_through(c, direction):
 
 
 def vanilla_cubic_interpolator(*args, z=0.37):
-    points = list_reals_to_list_complex(*args)
+    # points = list_reals_to_list_complex(*args)
+    points = real_args_to_complex_args(*args)
 
     if len(points) <= 1:
         raise ValueError("not enough points in vanilla_cubic_interpolator")

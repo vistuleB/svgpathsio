@@ -14,7 +14,8 @@ from .path import (
     bbox2subpath, intersect_paths, rounded_polygon,
     rounded_polyline, svgpathtools_d_string_params,
     vanilla_cubic_interpolator, is_path_or_subpath,
-    custom_x_y_to_x_y_transform, x_val_cut, heuristic_has_point_outside
+    custom_x_y_to_x_y_transform, x_val_cut, heuristic_has_point_outside,
+    inv_arclength
 )
 
 from .parser import (
@@ -37,6 +38,6 @@ from .misctools import (
     hex2rgb, rgb2hex, rgb012hex, rgb_affine_combination,
     open_in_browser, int_else_float,
     HtmlColors, HtmlColorsLowerCase,
-    random_color, Rgba, RgbaDif, real_numbers_in,
+    random_color, Rgba, RgbaDif, real_numbers_in, real_numbers_in_iterator,
     is_css_color, to_decimals
 )

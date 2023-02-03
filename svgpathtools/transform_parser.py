@@ -420,7 +420,16 @@ def turn_thing_into_transform_tokens(thing):
         if is_2_by_3_matrix_as_nested_list(thing):
             return [thing[0][0], thing[1][0], thing[0][1], thing[1][1], thing[0][2], thing[1][2]]
 
-        assert False
+        recursive_tokens = []
+        for t in thing:
+            recursive_tokens.extend(turn_thing_into_transform_tokens(t))
+        return recursive_tokens
+
+    if isinstance(thing, tuple):
+        recursive_tokens = []
+        for t in thing:
+            recursive_tokens.extend(turn_thing_into_transform_tokens(t))
+        return recursive_tokens
 
     try:
         x = thing.x 
@@ -452,7 +461,7 @@ def string_and_values_packager(thing):
         yield cur_values
 
 
-def turn_into_transform_tokens(*args):
+def tokenize(args):
     if len(args) == 1 and isinstance(args[0], list):
         thing = args[0]
 
@@ -506,10 +515,7 @@ def turn_into_transform_tokens(*args):
     return final_tokens
 
 
-def string_and_values_iterator(tokens):
-    command = None
-    values = []
-
+def string_and_values_iterator(args):
     def process_real_or_string_token(t):
         nonlocal command
         nonlocal values
@@ -523,6 +529,7 @@ def string_and_values_iterator(tokens):
 
             else:
                 assert len(values) == 0
+                assert command is None or command in allowable
                 command = t
 
         elif isinstance(t, Real):
@@ -534,7 +541,10 @@ def string_and_values_iterator(tokens):
             print("t: ", t)
             assert False
 
-    for t in tokens:
+    command = None
+    values = []
+
+    for t in tokenize(args):
         if isinstance(t, list):
             for q in t:
                 yield from process_real_or_string_token(q)
@@ -543,6 +553,7 @@ def string_and_values_iterator(tokens):
             yield from process_real_or_string_token(t)
 
     if command is not None:
+        assert command in allowable, command
         if len(values) not in allowable[command]:
             print(tokens)
         assert len(values) in allowable[command]
@@ -554,10 +565,8 @@ def parse_transform(*args):
         assert is_svg_matrix(args[0])
         return args[0]
 
-    tokens = turn_into_transform_tokens(*args)
-
     tf = np.identity(3)
-    for (command, values) in string_and_values_iterator(tokens):
+    for (command, values) in string_and_values_iterator(args):
         tf = tf.dot(command_and_values_to_matrix(command, values))
 
     return tf
@@ -574,9 +583,7 @@ def generate_transform(*args, decimals=None, html_style=False):
             (command == 'rotate' and values[0] == 0)
         )
 
-    tokens = turn_into_transform_tokens(*args)
-
     return ' '.join(x for x in [
         command_and_values_to_string(command, values, decimals=decimals, html_style=html_style) for
-        command, values in string_and_values_iterator(tokens) if not is_identity_transform_pair(command, values)
+        command, values in string_and_values_iterator(args) if not is_identity_transform_pair(command, values)
     ] if x != '')

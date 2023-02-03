@@ -472,6 +472,14 @@ def real_numbers_in(thing):
     assert False
 
 
+def real_numbers_in_iterator(*args):
+    for a in args:
+        x, y = real_numbers_in(a)
+        yield x
+        if y is not None:
+            yield y
+
+
 # stackoverflow.com/questions/214359/converting-hex-color-to-rgb-and-vice-versa
 def hex2rgb(value):
     """Converts a hexadeximal color string to an RGB 3-tuple
