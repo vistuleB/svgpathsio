@@ -11,7 +11,7 @@ from math import sqrt, cos, sin, degrees, radians, log, pi, tan, atan2, floor, c
 from cmath import exp, phase
 from warnings import warn
 from collections.abc import MutableSequence
-from numbers import Number, Real
+from numbers import Number, Real, Complex
 import numpy as np
 
 try:
@@ -76,10 +76,45 @@ def real_args_to_complex_args(*args):
     return [complex(x, y) for (x, y) in zip(list_reals[::2], list_reals[1::2])]
 
 
-# def list_reals_to_list_complex(list_reals):
-#     assert len(list_reals) % 2 == 0
-#     assert all(isinstance(x, Real) for x in list_reals)
-#     return [complex(x, y) for (x, y) in zip(list_reals[::2], list_reals[1::2])]
+def complex_four_way_intersection(o1, dir1, o2, dir2, determinant_tolerance=1e-6):
+    assert isinstance(o1, Complex)
+    assert isinstance(o2, Complex)
+    assert isinstance(dir1, Complex)
+    assert isinstance(dir2, Complex)
+
+    A = np.array([
+        [real(dir1), -real(dir2)],
+        [imag(dir1), -imag(dir2)]
+    ])
+
+    det = np.linalg.det(A);
+
+    if determinant_tolerance is None:
+        if np.isclose(0, det):
+            raise ValueError("np.isclose(0) determinant error")
+
+    else:
+        assert determinant_tolerance > 0
+        if abs(det) < determinant_tolerance:
+            raise ValueError(f"np.linalg.det(a) = {det} < determinant_tolerance = {determinant_tolerance}")
+
+    b = np.array([[real(o2 - o1)], [imag(o2 - o1)]])
+    L = np.linalg.inv(A).dot(b)
+
+    q1 = o1 + L[0, 0] * dir1
+    q2 = o2 + L[1, 0] * dir2
+
+    assert np.isclose(0, abs(q1 - q2))
+
+    if real(dir2) == 0: # if so, real(q1) should equal real(o2)
+        q1 = real(o2) + 1j * imag(q1)
+        assert np.isclose(0, abs(q1 - q2))
+
+    if imag(dir2) == 0: # if so, imag(q1) should equal imag(o2)
+        q1 = real(q1) + 1j * imag(o2)
+        assert np.isclose(0, abs(q1 - q2))
+
+    return q1
 
 
 # Default Parameters  ########################################################
@@ -1111,6 +1146,8 @@ def heuristic_has_point_outside(p, enclosure, tol=1e-8):
         return True
 
     for t in np.arange(0.05, 0.96, 0.05):  # avoid endpoints as too touchy
+        if p.length() == 0:
+            continue
         if not enclosure.even_odd_encloses(p.point(t)):
             return True
 
@@ -1153,7 +1190,7 @@ def crop(thing, enclosure, crop_to_inside=True, debug=False):
 
     kept_pieces = []
     for i, p in enumerate(pieces):
-        if heuristic_has_point_outside(p, enclosure) != crop_to_inside:
+        if not p.is_empty() and heuristic_has_point_outside(p, enclosure) != crop_to_inside:
             kept_pieces.append(p)
             if debug:
                 print(f"piece (i={i}), kept:")
@@ -1186,8 +1223,6 @@ def intersect_subpaths(s1, s2):
         for (b1, b2) in intersections:
             if b1 == a1:
                 return b2
-        print("a1:", a1)
-        print("intersections:", intersections)
         assert False
 
     def find_matching_a1(a2):
@@ -1460,10 +1495,22 @@ def divergence_of_offset(p1, p2, putatitve_offset, safety=10,
     return max_distance
 
 
-def compute_offset_joining_subpath(seg1, off1, seg2, off2,
-                                   offset_amount,
-                                   join='miter',
-                                   miter_limit=4):
+def dot_product(z1, z2):
+    assert isinstance(z1, Complex)
+    assert isinstance(z2, Complex)
+    return real(z1 * z2.conjugate())
+
+
+def compute_offset_joining_subpath(
+        seg1,
+        off1,
+        seg2,
+        off2,
+        offset_amount,
+        join,
+        miter_limit,
+        round_join_radius
+    ):
     """returns a triple of the form 'subpath, t1, t2' where 'subpath' is the
     connecting subpath, t1 and t2 are the new end and start points of off1,
     off2, respectively"""
@@ -1493,19 +1540,56 @@ def compute_offset_joining_subpath(seg1, off1, seg2, off2,
 
     # note: real(w * z.conjugate()) is the dot product of w, z as vectors
 
-    if offset_amount * real(n1 * tangent2_base.conjugate()) > 0:
+    if offset_amount * dot_product(n1, tangent2_base) > 0:
         # acute case
         intersections = off1.intersect(off2)
-        if len(intersections) > 0:
-            a1, a2 = intersections[-1]
-            t1, t2 = a1.t, a2.t
-            assert 0 <= t1 <= 1 and 0 <= t2 <= 1
-            assert np.isclose(off1.point(t1), off2.point(t2))
-            if t2 > 0 and t1 < 1:
-                return None, t1, t2
-        return Subpath(Line(off1.end, off2.start)), 1, 0
 
-    if offset_amount * real(n1 * tangent2_base.conjugate()) < 0:
+        if len(intersections) == 0:
+            # print("case 1")
+            return Subpath(Line(off1.end, off2.start)), 1, 0
+        
+        assert len(intersections) > 0
+
+        a1, a2 = intersections[-1]
+        t1, t2 = a1.t, a2.t
+        assert 0 <= t1 <= 1 and 0 <= t2 <= 1
+        assert np.isclose(off1.point(t1), off2.point(t2))
+
+        if join == 'miter':
+            # print("case 2")
+            return None, t1, t2
+
+        assert join == 'round'
+
+        # the following is only if you wanted 'rounded inside', which you may not always
+        # want; might have to add more options
+
+        tangent_t1 = off1.unit_tangent(t1)
+        tangent_t2 = off2.unit_tangent(t2)
+        q = (tangent_t2 / (-tangent_t1))
+        half_aperture = abs(atan2(imag(q), real(q)) * 0.5)
+        if abs(half_aperture - eta) < radians(0.5):
+            # screw it, pretend it's already smooth:
+            # print("case 3")
+            return None, t1, t2
+        dist_for_join = round_join_radius * tan(eta - half_aperture)
+        approx_new_t1 = t1 - (dist_for_join / off1.length())
+        approx_new_t2 = t2 + (dist_for_join / off2.length())
+        if approx_new_t1 <= 0:
+            raise ValueError("no room in segment for round join (1):", approx_new_t1, approx_new_t2)
+        if approx_new_t2 >= 1:
+            raise ValueError("no room in segment for round join (2):", approx_new_t2, approx_new_t2)
+        p1 = off1.point(approx_new_t1)
+        p2 = off2.point(approx_new_t2)
+        tangent_p1 = off1.unit_tangent(approx_new_t1) 
+        tangent_p2 = off2.unit_tangent(approx_new_t2)
+        l, m = complex_linear_congruence(p1, tangent_p1 * 1j, p2, tangent_p2 * 1j)
+        r1 = (abs(l) + abs(m)) * 0.5
+        sweep = 1 if imag(tangent_p1 * tangent_p2.conjugate()) < 0 else 0
+        # print("case 4")
+        return Subpath(Arc(p1, r1 + 1j * r1, 0, 0, sweep, p2)), approx_new_t1, approx_new_t2
+
+    if offset_amount * dot_product(n1, tangent2_base) < 0:
         # obtuse case
         if join == 'miter':
             a = base_corner - tangent1_base
@@ -1522,32 +1606,79 @@ def compute_offset_joining_subpath(seg1, off1, seg2, off2,
 
             miter = abs(apex - base_corner) / abs(offset_amount)
             if miter > miter_limit:
+                # print("case 5")
                 return Subpath(Line(off1.end, off2.start)), 1, 0
             else:
                 # the only case we actually need a path instead of a segment:
-                return Subpath(Line(off1.end, apex),
-                               Line(apex, off2.start)), 1, 0
+                # print("case 6")
+                return Subpath(Line(off1.end, apex), Line(apex, off2.start)), 1, 0
 
         assert join == 'round'
 
+        # a lot of the same shit as above for 'round', but only worse,
+        # because we sometimes need to extend off1, off2 with straight
+        # lines, sometimes need to cut into them
+
+        tangent_t1 = off1.unit_tangent(1)
+        tangent_t2 = off2.unit_tangent(0)
+        q = (tangent_t2 / (-tangent_t1))
+        half_aperture = abs(atan2(imag(q), real(q)) * 0.5)
+        if abs(half_aperture - eta) < radians(0.5):
+            # screw it, join with a line:
+            # print("case 7")
+            return Subpath(Line(off1.end, off2.start)), 1, 0
+        dist_for_join = round_join_radius * tan(eta - half_aperture)
+        abs_offset_amount = abs(offset_amount)
+        dist_from_offset = abs_offset_amount * tan(eta - half_aperture)
+        # just a random check:
         r1 = abs(off1.end - base_corner)
         r2 = abs(off2.start - base_corner)
+        assert np.isclose(abs_offset_amount, r1)
+        assert np.isclose(abs_offset_amount, r2)
 
-        assert np.isclose(r1, r2)
+        if np.isclose(dist_from_offset, dist_for_join):
+            sweep = 1 if imag(tangent_t1 * tangent_t2.conjugate()) < 0 else 0
+            # print("case 8")
+            return Subpath(Arc(off1.end, abs_offset_amount + 1j * abs_offset_amount, 0, 0, sweep, off2.start)), 1, 0
 
-        sweep = 1 if imag(tangent1_base * tangent2_base.conjugate()) < 0 else 0
+        delta = abs(dist_for_join - dist_from_offset)
 
-        return \
-            Subpath(Arc(off1.end, r1 + 1j * r1, 0, 0, sweep, off2.start)), \
-            1, 0
+        if dist_from_offset < dist_for_join:
+            approx_new_t1 = 1 - (delta / off1.length())
+            approx_new_t2 = (delta / off2.length())
+            if approx_new_t1 <= 0:
+                raise ValueError("no room in segment for round join (1b)")
+            if approx_new_t2 >= 1:
+                raise ValueError("no room in segment for round join (2b)")
+            p1 = off1.point(approx_new_t1)
+            p2 = off2.point(approx_new_t2)
+            tangent_p1 = off1.unit_tangent(approx_new_t1) 
+            tangent_p2 = off2.unit_tangent(approx_new_t2)
+            l, m = complex_linear_congruence(p1, tangent_p1 * 1j, p2, tangent_p2 * 1j)
+            # assert np.isclose(l, m)
+            r1 = abs(l)
+            print(f"compare r1 = {r1} to round_join_radius = {round_join_radius}")
+            sweep = 1 if imag(tangent_p1 * tangent_p2.conjugate()) < 0 else 0
+            # print("case 9")
+            return Subpath(Arc(p1, r1 + 1j * r1, 0, 0, sweep, p2)), approx_new_t1, approx_new_t2
+        
+        assert dist_from_offset > dist_for_join
 
-    assert real(n1 * tangent2_base.conjugate()) == 0
-    assert np.isclose(off1.end, off2.start)
-    assert False
+        p1 = off1.end + tangent_t1 * delta
+        p2 = off2.start - tangent_t2 * delta
+        sweep = 1 if imag(tangent_t1 * tangent_t2.conjugate()) < 0 else 0
+        # print("case 10")
+        return Subpath(
+            Line(off1.end, p1),
+            Arc(p1, round_join_radius + 1j * round_join_radius, 0, 0, sweep, p2),
+            Line(p2, off2.start)
+        ), 1, 0
+
+    assert dot_product(n1, tangent2_base) == 0
+    return Line(off1.end, off2.start), 1, 0
 
 
-def join_offset_segments_into_subpath(skeleton, offsets, putative_amount,
-                                      join, miter_limit):
+def join_offset_segments_into_subpath(skeleton, offsets, putative_amount, join, miter_limit, round_join_radius):
     """for-internal-use function, assumes all the following:"""
     assert isinstance(skeleton, Subpath) and isinstance(offsets, Path)
     assert len(skeleton) == offsets.num_segments()
@@ -1560,8 +1691,7 @@ def join_offset_segments_into_subpath(skeleton, offsets, putative_amount,
     assert all(isinstance(thing, Segment) for thing in skeleton)
     assert all(isinstance(thing, Subpath) for thing in offsets)
 
-    segment_pairs = [(u, v) for u, v in zip(skeleton,
-                                            offsets.segment_iterator())]
+    segment_pairs = [(u, v) for u, v in zip(skeleton, offsets.segment_iterator())]
 
     if skeleton.Z:
         segment_pairs.append((skeleton[0], offsets[0][0]))
@@ -1595,9 +1725,14 @@ def join_offset_segments_into_subpath(skeleton, offsets, putative_amount,
 
         else:
             p, t1, t2 = compute_offset_joining_subpath(
-                seg1, off1, seg2, off2,
+                seg1,
+                off1,
+                seg2,
+                off2,
                 putative_amount,
-                join=join, miter_limit=miter_limit
+                join,
+                miter_limit,
+                round_join_radius,
             )
 
             assert t1 >= 0 and t2 <= 1
@@ -1614,6 +1749,13 @@ def join_offset_segments_into_subpath(skeleton, offsets, putative_amount,
             to_return[-1] = o1  # (overwrite previous )
 
             if p is not None:
+                if p.start != o1.end:
+                    # print("t1:", t1)
+                    print(f"{off1.point(t1):.5f}")
+                    print(f"{p.start:.5f}")
+                    print(f"{off1.cropped(0, t1).end:.5f}")
+                    print(f"{o1.end:.5f}")
+                    print(abs(p.start - o1.end))
                 assert p.start == o1.end
                 assert p.end == o2.start
                 to_return.extend(p)
@@ -2866,10 +3008,29 @@ class Segment(ContinuousCurve):
 
         return self.tweaked(start=new_x + 1j * new_y)
 
-    def stroke(self, width, quality=0.01, safety=5,
-               cap='butt', reversed=False):
-        return Subpath(self).stroke(width, quality=quality, safety=safety,
-                                    cap=cap, reversed=reversed)
+    def stroke(
+            self,
+            width,
+            quality=0.01,
+            safety=5,
+            cap='butt',
+            reversed=False
+    ):
+        return Subpath(self).stroke(
+            width,
+            quality=quality,
+            safety=safety,
+            cap=cap,
+            reversed=reversed
+        )
+    
+
+def tweak_bezier_points_to_start_end(start, end, bpoints):
+    assert len(bpoints) >= 2
+    assert np.isclose(bpoints[0], start)
+    assert np.isclose(bpoints[-1], end)
+    bpoints[0] = start
+    bpoints[-1] = end
 
 
 class BezierSegment(Segment):
@@ -3046,13 +3207,18 @@ class BezierSegment(Segment):
 
         else:
             raise TypeError("other_seg must be a path segment")
-
+        
     def split(self, t_or_address):
         """returns two segments of same type whose union is this segment and
         which join at self.point(t). (Overwritten by Line.)"""
         t = address2param(self, t_or_address)
 
         bpoints1, bpoints2 = split_bezier(self.bpoints, t)
+
+        p = self.point(t)
+
+        tweak_bezier_points_to_start_end(self.start, p, bpoints1)
+        tweak_bezier_points_to_start_end(p, self.end, bpoints2)
 
         if isinstance(self, QuadraticBezier):
             return QuadraticBezier(*bpoints1), QuadraticBezier(*bpoints2)
@@ -4065,8 +4231,14 @@ class Arc(Segment):
 
     def reversed(self):
         """returns a copy of the Arc object with its orientation reversed."""
-        return Arc(self._end, self._radius, self._rotation, self._large_arc,
-                   not self._sweep, self._start)
+        return Arc(
+            self._end,
+            self._radius,
+            self._rotation,
+            self._large_arc,
+            not self._sweep,
+            self._start
+        )
 
     def t2lambda(self, t):
         p = self.point(t) - self.center
@@ -4699,7 +4871,11 @@ class Subpath(ContinuousCurve, MutableSequence):
                    self._segments]
 
         self._length = sum(lengths)
-        self._lengths = [each / self._length for each in lengths]
+        if (self._length > 0):
+            self._lengths = [each / self._length for each in lengths]
+
+        else:
+            self._lengths = [0 for _ in lengths]
 
     def point(self, T):
         a = self.T2address(T, trust_existing_fields=True)  # (the customer is always right...)
@@ -5543,15 +5719,32 @@ class Subpath(ContinuousCurve, MutableSequence):
         self._Z = False
         return self
 
-    def offset(self, amount, quality=0.01, safety=5,
-               join='miter', miter_limit=4):
+    def offset(
+            self,
+            amount,
+            quality=0.01,
+            safety=5,
+            join='miter',
+            miter_limit=4
+    ):
         return self.pro_offset(amount, quality, safety, join, miter_limit)[0]
 
-    def pro_offset(self, amount, quality=0.01, safety=10,
-                   join='miter', miter_limit=4, two_sided=False):
+    def pro_offset(
+        self,
+        amount,
+        quality=0.01,
+        safety=10,
+        join='miter',
+        miter_limit=4,
+        two_sided=False,
+        round_join_radius=None
+    ):
+        if join == 'round' and round_join_radius is None:
+            round_join_radius = amount
+        
         converted = self.converted_to_bezier(quality, safety, True)
-        way_out   = Path()  # don't worry this will soon be a subpath
-        way_in    = Path()  # don't worry this will soon be a subpath
+        way_out   = Path()    # don't worry this will soon be a subpath
+        way_in    = Path()    # don't worry this will soon be a subpath
         skeleton  = Subpath()
 
         for seg in converted:
@@ -5570,19 +5763,19 @@ class Subpath(ContinuousCurve, MutableSequence):
         reversed_skeleton = skeleton.reversed() if two_sided else Subpath()
         assert len(reversed_skeleton) == way_in.num_segments()
         both_results = []
-        both_skeleton_offset_pairs = [
-            (skeleton, way_out),
-            (reversed_skeleton, way_in)
-        ]
+        both_skeleton_offset_pairs = [(skeleton, way_out), (reversed_skeleton, way_in)]
 
         for ske_off_pair in both_skeleton_offset_pairs:
             joined = join_offset_segments_into_subpath(
                 ske_off_pair[0],
                 ske_off_pair[1],
-                amount, join, miter_limit
+                amount,
+                join,
+                miter_limit,
+                round_join_radius
             )
             both_results.append(joined)
-            assert joined.Z == self.Z
+            assert joined.Z == self.Z or ske_off_pair[1].is_empty()
 
         way_out = both_results[0]  # Subpath
         way_in = both_results[1]  # Subpath
@@ -5592,8 +5785,16 @@ class Subpath(ContinuousCurve, MutableSequence):
 
         return way_out, skeleton, way_in
 
-    def stroke(self, width, quality=0.01, safety=5, join='miter',
-               miter_limit=4, cap='butt', reversed=False):
+    def stroke(
+            self,
+            width,
+            quality=0.01,
+            safety=5,
+            join='miter',
+            miter_limit=4,
+            cap='butt',
+            reversed=False
+    ):
         if reversed:
             width *= -1
 
@@ -6429,8 +6630,15 @@ class Path(Curve, MutableSequence):
                miter_limit=4):
         return self.pro_offset(amount, quality, safety, join, miter_limit)[0]
 
-    def pro_offset(self, amount, quality=0.01, safety=5, join='miter',
-                   miter_limit=4, two_sided=False):
+    def pro_offset(
+        self,
+        amount,
+        quality=0.01,
+        safety=5,
+        join='miter',
+        miter_limit=4,
+        two_sided=False
+    ):
         skeletons = Path()
         way_outs = Path()
         way_ins  = Path()
