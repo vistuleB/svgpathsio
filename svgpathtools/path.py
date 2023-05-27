@@ -6664,3 +6664,4 @@ class Path(Curve, MutableSequence):
             assert isinstance(path, Path)
             stroke.extend(path)
         return stroke
+

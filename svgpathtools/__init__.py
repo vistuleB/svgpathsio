@@ -35,9 +35,20 @@ from .transform_parser import (
 from .polytools import polyroots, polyroots01, rational_limit, real, imag
 
 from .misctools import (
-    hex2rgb, rgb2hex, rgb012hex, rgb_affine_combination,
-    open_in_browser, int_else_float,
-    HtmlColors, HtmlColorsLowerCase,
-    random_color, Rgba, RgbaDif, real_numbers_in, real_numbers_in_iterator,
-    is_css_color, to_decimals
+    hex2rgb,
+    rgb2hex,
+    rgb012hex,
+    rgb_affine_combination,
+    open_in_browser,
+    int_else_float,
+    HtmlColors,
+    HtmlColorsLowerCase,
+    HtmlColorsLowerCaseInverted,
+    random_color,
+    Rgba,
+    RgbaDif,
+    real_numbers_in,
+    real_numbers_in_iterator,
+    is_css_color,
+    to_decimals
 )

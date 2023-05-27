@@ -164,8 +164,12 @@ HtmlColors = {
 
 
 HtmlColorsLowerCase = {}
+HtmlColorsLowerCaseInverted = {}
 for z, item in HtmlColors.items():
-    HtmlColorsLowerCase[z.lower()] = item
+    HtmlColorsLowerCase[z.lower()] = item.lower()
+    HtmlColorsLowerCaseInverted[item.lower()] = z.lower()
+
+
 
 
 # HtmlColorsLowerCaseNames = [x.lower() for x in HtmlColors]
