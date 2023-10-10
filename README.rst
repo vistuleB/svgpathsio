@@ -1,5 +1,5 @@
-svgpathtools offset and stroke fork
-===================================
+Python library for working with SVG paths
+=========================================
 
 Streamlined fork of mathandy/svgpathtools that focuses 
 on providing complete working SVG path manipulations
