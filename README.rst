@@ -3,23 +3,16 @@ Python library for working with SVG paths
 
 Streamlined fork of mathandy/svgpathtools. Focuses 
 on providing complete working support SVG path manipulations
-without document support. 
+without document support. Input/output functionalities are
+limited to the parsing and pretty-printing of paths.
 
 Main classes:
 
-- ``Path`` objects correspond to general SVG paths, made up
-one more connected ``Subpath``s
-- ``Subpath`` objects correspond to continuous (connected) SVG
-paths; each subpath can be topologically closed or not,
-and subpaths that are geometrically closed are not necessarily
-topologically closed (i.e., just because the subpath ends 
-where it starts does not mean that ``Z`` property has been set)
-- ``Segment`` is the parent class of the constituent segments
-that make up subpaths; each segment is either an ``Arc`` or a 
-`BezierCurve`
+- ``Path`` objects correspond to general SVG paths, made up of one more connected ``Subpath``s
+- ``Subpath`` objects correspond to continuous (connected) SVG paths; each subpath can be topologically closed or not, and subpaths that are geometrically closed are not necessarily topologically closed (i.e., just because the subpath ends  where it starts does not mean that ``Z`` property has been set)
+- ``Segment`` is the parent class of the constituent segments that make up subpaths; each segment is either an ``Arc`` or a ``BezierCurve``
 - ``Arc`` afore-mentioned instance of ``Segment``
-- ``BezierCurve`` instance of ``Segment`, parent class of ``Line``,
-`QuadraticBezier`` and ``CubicBezier`
+- ``BezierCurve`` instance of ``Segment``, parent class of ``Line``, ``QuadraticBezier`` and ``CubicBezier``
 - ``CubicBezier`` instance of ``BezierCurve`` (and ``Segment``)
 - ``QuadraticBezier`` instance of ``BezierCurve`` (and ``Segment``)
 - ``Line`` instance of ``BezierCurve`` (and ``Segment``)
@@ -27,10 +20,10 @@ that make up subpaths; each segment is either an ``Arc`` or a
 
 Thus: 
 
-1. a ``Path`` is a container of ``Subpath`s
-2. a ``Subpath`` is a container of ``Segment`s
+1. a ``Path`` is a container of ``Subpath``s
+2. a ``Subpath`` is a container of ``Segment``s
 3. each ``Segment`` is either an ``Arc`` or a ``BezierCurve`
-4. the atomic ``Segment`` types are ``Arc``, ``Line`, ``QuadraticBezier`` and ``CubicBezier``, with the latter 3 inheriting from ``BezierCurve``
+4. the atomic ``Segment`` types are ``Arc``, ``Line``, ``QuadraticBezier`` and ``CubicBezier``, with the latter 3 inheriting from ``BezierCurve``
 5. besides the inheritances described above, all objects also inherit from ``Curve``, where operations common to all objects such ``.length`` or ``.transform`` are implemented
 
 Note ``Path`` and ``Subpaths`` present much the same API and
