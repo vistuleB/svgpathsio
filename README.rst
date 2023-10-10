@@ -45,7 +45,8 @@ Features
 -  compute **area** enclosed by a closed path
 -  compute **arc length**
 -  compute **inverse arc length**
--  **transition maps** between path, subpath and segment coordinates
+-  convert between path, subpath and segment parameterizations (see notes 
+   on ``Address`` object below)
 -  convert Bézier path segments to **numpy.poly1d** (polynomial) objects
 -  convert polynomials (in standard form) to their Bézier form
 -  some HTML color manipulation convenience functions (conversion from 
