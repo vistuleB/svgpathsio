@@ -32,28 +32,26 @@ are often interchangeable objects.
 Features
 --------
 
+-  **parse** and **pretty-print** paths
+-  **parse** and **pretty-print** SVG transforms, navigating between three format types: transform ``string``, list of tokens (``["translate", 0, 10, "scale", 2.3]``), and numpy ``nd.array``
+-  **apply transforms** to paths
 -  compute **tangent vectors** and (right-hand rule) **normal vectors**
 -  compute **curvature**
 -  compute **intersections** between paths and/or segments
--  find a **bounding box** for a path, subpath or segment
--  **reverse** segment/path orientation
+-  compute **bounding boxes** of paths, subpaths and segments
+-  **reverse** segment/subpath/path orientation
 -  **crop** and **split** paths and segments
--  **smooth** paths (i.e. smooth away kinks to make paths
-   differentiable)
--  apply arbitrary **svg transformations** to a path; flatten
-   documents
--  compute **area** enclosed by a closed path
+-  **offset** and **stroke** paths
+-  take path **unions**
+-  compute **enclosed area**
 -  compute **arc length**
 -  compute **inverse arc length**
--  convert between path, subpath and segment parameterizations (see notes 
-   on ``Address`` object below)
+-  **convert** between path, subpath and segment parameterizations (see notes on ``Address`` object below)
+-  **convert** Arc segments to CubicBezier segments
 -  convert Bézier path segments to **numpy.poly1d** (polynomial) objects
 -  convert polynomials (in standard form) to their Bézier form
 -  some HTML color manipulation convenience functions (conversion from 
    rgb tuples to hexadecimal strings and back, named html color table)
--  crop path to other path
--  offset and stroke paths
--  path union
 -  elliptical arc segment to bezier-based subpaths conversion
 -  bounding box computations with and without stroke width
 
