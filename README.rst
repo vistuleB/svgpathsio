@@ -1,18 +1,14 @@
 Python library for working with SVG paths
 =========================================
 
-Streamlined fork of mathandy/svgpathtools that focuses 
-on providing complete working SVG path manipulations
-without support or concern for the enclosing document.
+Streamlined fork of mathandy/svgpathtools. Focuses 
+on providing complete working support SVG path manipulations
+without document support. 
 
-Contains support for stroking and offsetting paths,
-paths with multiple subpaths, and the disambiguation of 
-topological closure from geometric closure.
-
-Organized by the following OOP hierarchy:
+Main classes:
 
 - ``Path`` objects correspond to general SVG paths, made up
-one more connected ``Subpath`s
+one more connected ``Subpath``s
 - ``Subpath`` objects correspond to continuous (connected) SVG
 paths; each subpath can be topologically closed or not,
 and subpaths that are geometrically closed are not necessarily
