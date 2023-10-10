@@ -11,33 +11,33 @@ topological closure from geometric closure.
 
 Organized by the following OOP hierarchy:
 
-- `Path` objects correspond to general SVG paths, made up
-one more connected `Subpath`s
-- `Subpath` objects correspond to continuous (connected) SVG
+- ``Path`` objects correspond to general SVG paths, made up
+one more connected ``Subpath`s
+- ``Subpath`` objects correspond to continuous (connected) SVG
 paths; each subpath can be topologically closed or not,
 and subpaths that are geometrically closed are not necessarily
 topologically closed (i.e., just because the subpath ends 
-where it starts does not mean that `Z` property has been set)
-- `Segment` is the parent class of the constituent segments
-that make up subpaths; each segment is either an `Arc` or a 
+where it starts does not mean that ``Z`` property has been set)
+- ``Segment`` is the parent class of the constituent segments
+that make up subpaths; each segment is either an ``Arc`` or a 
 `BezierCurve`
-- `Arc` afore-mentioned instance of `Segment`
-- `BezierCurve` instance of `Segment`, parent class of `Line`,
-`QuadraticBezier` and `CubicBezier`
-- `CubicBezier` instance of `BezierCurve` (and `Segment`)
-- `QuadraticBezier` instance of `BezierCurve` (and `Segment`)
-- `Line` instance of `BezierCurve` (and `Segment`)
-- `Curve` base class from which all the above inherit
+- ``Arc`` afore-mentioned instance of ``Segment``
+- ``BezierCurve`` instance of ``Segment`, parent class of ``Line``,
+`QuadraticBezier`` and ``CubicBezier`
+- ``CubicBezier`` instance of ``BezierCurve`` (and ``Segment``)
+- ``QuadraticBezier`` instance of ``BezierCurve`` (and ``Segment``)
+- ``Line`` instance of ``BezierCurve`` (and ``Segment``)
+- ``Curve`` base class from which all the above inherit
 
 Thus: 
 
-1. a `Path` is a container of `Subpath`s
-2. a `Subpath` is a container of `Segment`s
-3. each `Segment` is either an `Arc` or a `BezierCurve`
-4. the atomic `Segment` types are `Arc`, `Line`, `QuadraticBezier` and `CubicBezier`, with the latter 3 inheriting from `BezierCurve`
-5. besides the inheritances described above, all objects also inherit from `Curve`, where operations common to all objects such `.length` or `.transform` are implemented
+1. a ``Path`` is a container of ``Subpath`s
+2. a ``Subpath`` is a container of ``Segment`s
+3. each ``Segment`` is either an ``Arc`` or a ``BezierCurve`
+4. the atomic ``Segment`` types are ``Arc``, ``Line`, ``QuadraticBezier`` and ``CubicBezier``, with the latter 3 inheriting from ``BezierCurve``
+5. besides the inheritances described above, all objects also inherit from ``Curve``, where operations common to all objects such ``.length`` or ``.transform`` are implemented
 
-Note `Path` and `Subpaths` present much the same API and
+Note ``Path`` and ``Subpaths`` present much the same API and
 are often interchangeable objects.
 
 Overview of Features
@@ -72,11 +72,11 @@ Support for:
 Positions on paths, subpaths or segments are specified
 parameterically, but this easily leads to "parameter ambiguity" 
 (i.e., does the given real number represent a segment, path or subpath
-parameter?). To counter this, the module returns `Address` objects
-instead of parameter values, where an `Address` object is a wrapper
+parameter?). To counter this, the module returns ``Address`` objects
+instead of parameter values, where an ``Address`` object is a wrapper
 containing both a parameter value and its semantics. Correspondingly,
-the API also accepts `Address` objects instead of standalone parameters
-as inputs, and will check that the right type of `Address` object is 
+the API also accepts ``Address`` objects instead of standalone parameters
+as inputs, and will check that the right type of ``Address`` object is 
 used in the right place.
 
 Prerequisites
