@@ -52,18 +52,18 @@ Features
 -  convert polynomials (in standard form) to their Bézier form
 -  some HTML color manipulation convenience functions (conversion from 
    rgb tuples to hexadecimal strings and back, named html color table)
--  elliptical arc segment to bezier-based subpaths conversion
--  bounding box computations with and without stroke width
 
-Positions on paths, subpaths or segments are specified
-parameterically, but this easily leads to "parameter ambiguity" 
-(i.e., does the given real number represent a segment, path or subpath
-parameter?). To counter this, the module returns ``Address`` objects
-instead of parameter values, where an ``Address`` object is a wrapper
-containing both a parameter value and its semantics. Correspondingly,
-the API also accepts ``Address`` objects instead of standalone parameters
-as inputs, and will check that the right type of ``Address`` object is 
-used in the right place.
+The ``Address`` object
+----------------------
+
+While positions on paths, subpaths and segments are specified
+parameterically, this easily leads to "parameter ambiguity".
+(I.e., does the given real number represent a segment, path or subpath
+parameter?) To counter the tendency for confusion, the module wraps parameter
+values inside of a larger ``Address`` object that disambiguates the
+type of the parameter. ``Address`` objects can be substituted at all 
+points in the API for parameter values, and the module will check that the
+right type of ``Address`` object is used in the right place.
 
 Prerequisites
 -------------
