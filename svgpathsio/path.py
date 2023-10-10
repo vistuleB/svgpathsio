@@ -21,21 +21,20 @@ try:
 except ImportError:
     _quad_available = False
 
-
 # Internal dependencies
-from svgpathtools.bezier import \
+from svgpathsio.bezier import \
     bezier_intersections, split_bezier, \
     bezier_x_value_intersections, bezier_y_value_intersections, \
     bezier_xbox, bezier_ybox, \
     bezier_by_line_intersections, \
     polynomial2bezier, bezier2polynomial
 
-from svgpathtools.misctools import BugException, real_numbers_in, real_numbers_in_iterator
+from svgpathsio.misctools import BugException, real_numbers_in, real_numbers_in_iterator
 
-from svgpathtools.polytools import \
+from svgpathsio.polytools import \
     rational_limit, polyroots, polyroots01, imag, real
 
-from svgpathtools.transform_parser import parse_transform
+from svgpathsio.transform_parser import parse_transform
 
 # trig
 
