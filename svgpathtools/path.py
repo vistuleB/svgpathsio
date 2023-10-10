@@ -5720,12 +5720,12 @@ class Subpath(ContinuousCurve, MutableSequence):
         return self
 
     def offset(
-            self,
-            amount,
-            quality=0.01,
-            safety=5,
-            join='miter',
-            miter_limit=4
+        self,
+        amount,
+        quality=0.01,
+        safety=5,
+        join='miter',
+        miter_limit=4
     ):
         return self.pro_offset(amount, quality, safety, join, miter_limit)[0]
 
