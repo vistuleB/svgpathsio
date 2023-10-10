@@ -46,8 +46,8 @@ Features
 -  compute **enclosed area**
 -  compute **arc length**
 -  compute **inverse arc length**
--  **convert** between path, subpath and segment parameterizations (see notes on ``Address`` object below)
--  **convert** Arc segments to CubicBezier segments
+-  convert between path, subpath and segment parameterizations (see notes on ``Address`` object below)
+-  convert Arc segments to CubicBezier segments
 -  convert Bézier path segments to **numpy.poly1d** (polynomial) objects
 -  convert polynomials (in standard form) to their Bézier form
 -  some HTML color manipulation convenience functions (conversion from 
