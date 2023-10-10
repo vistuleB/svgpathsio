@@ -8,7 +8,7 @@ limited to the parsing and pretty-printing of paths.
 
 Main classes:
 
-- ``Path`` objects correspond to general SVG paths, made up of one more connected ``Subpath``s
+- ``Path`` objects correspond to general SVG paths, made up of one more connected ``Subpath``%s
 - ``Subpath`` objects correspond to continuous (connected) SVG paths; each subpath can be topologically closed or not, and subpaths that are geometrically closed are not necessarily topologically closed (i.e., just because the subpath ends  where it starts does not mean that ``Z`` property has been set)
 - ``Segment`` is the parent class of the constituent segments that make up subpaths; each segment is either an ``Arc`` or a ``BezierCurve``
 - ``Arc`` afore-mentioned instance of ``Segment``
