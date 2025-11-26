@@ -10,12 +10,13 @@ from .path import (
     Subpath, Segment, BezierSegment, bpoints2bezier,
     poly2bez, bbox2path, param2address, address2param,
     Address, ValueAddressPair, points2lines, points2polyline,
-    points2polygon, crop, intersect_subpaths,
+    points2polygon, crop, intersect_subpaths, circle_generator,
     bbox2subpath, intersect_paths, rounded_polygon,
     rounded_polyline, svgpathtools_d_string_params,
     vanilla_cubic_interpolator, is_path_or_subpath,
     custom_x_y_to_x_y_transform, x_val_cut, heuristic_has_point_outside,
-    inv_arclength
+    inv_arclength, custom_transform,
+    transform_to_other_space, copy
 )
 
 from .parser import (
@@ -47,6 +48,7 @@ from .misctools import (
     random_color,
     Rgba,
     RgbaDif,
+    real_numbers_in_2arg_version,
     real_numbers_in,
     real_numbers_in_iterator,
     is_css_color,

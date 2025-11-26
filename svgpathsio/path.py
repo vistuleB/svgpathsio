@@ -174,6 +174,32 @@ _NotImplemented4ArcException = \
 # Convenience Constructors  ##################################################
 
 
+def circle_generator(center, radius):
+    center = extract_complex(center)
+    assert isinstance(radius, Real)
+    r = radius + 1j * radius
+    s = center + radius
+    e = center - radius
+    arc1 = Arc(
+        s,
+        r,
+        0,
+        False,
+        True,
+        e
+    )
+    arc2 = Arc(
+        e,
+        r,
+        0,
+        False,
+        True,
+        s
+    )
+    return Subpath(arc1, arc2)
+
+
+
 def points2lines(*points):
     if len(points) < 2:
         raise ValueError("please provide at least two points")
@@ -620,7 +646,6 @@ def x_val_cut(curve, x_val, jiggle=True):
         assert False
 
 
-
 def custom_x_y_to_x_y_transform(curve, f):
     def to_complex(t):
         return t[0] + 1j * t[1]
@@ -637,9 +662,32 @@ def custom_x_y_to_x_y_transform(curve, f):
     elif isinstance(curve, Arc):
         raise TypeError("Please use converted_to_bezier before using custom_x_y_to_x_y_transform")
 
-    else:
-        raise TypeError("Input `curve` should be a Path, Subpath, Line, "
-                        "QuadraticBezier, CubicBezier, or Arc object.")
+    raise TypeError("Input `curve` should be a Path, Subpath, Line, "
+                    "QuadraticBezier, CubicBezier, or Arc object.")
+
+        
+def custom_transform(curve, f):
+    if isinstance(curve, Path):
+        return Path(*[custom_transform(subpath, f) for subpath in curve])
+
+    elif isinstance(curve, Subpath):
+        return Subpath(*[custom_transform(segment, f) for segment in curve]).set_Z(following=curve)
+
+    elif isinstance(curve, BezierSegment):
+        return bpoints2bezier([f(p) for p in curve.bpoints])
+
+    elif isinstance(curve, Arc):
+        raise TypeError("Please use converted_to_bezier before using custom_transform")
+
+    raise TypeError("Input `curve` should be a Path, Subpath, Line, "
+                    "QuadraticBezier, CubicBezier, or Arc object.")
+        
+        
+def transform_to_other_space(curve, f):
+    if isinstance(curve, BezierSegment):
+        return [f(p) for p in curve.bpoints]
+
+    raise TypeError("Input `curve` should be a Bezier Curve")
 
 
 def transform(curve, tf):
@@ -652,11 +700,8 @@ def transform(curve, tf):
 
     tf = parse_transform(tf)
 
-    if not isinstance(tf, np.ndarray):
-        raise ValueError("Expecting numpy.ndarray instance.")
-
-    if tf.shape != (3, 3):
-        raise ValueError("Expecting 3x3 numpy.ndarray.")
+    assert isinstance(tf, np.ndarray)
+    assert tf.shape == (3, 3)
 
     if isinstance(curve, Path):
         return Path(*[transform(subpath, tf) for subpath in curve])
@@ -689,7 +734,7 @@ def transform(curve, tf):
 
         if b[0, 0] == b[1, 1] and \
            b[1, 0] == b[0, 1] == 0:
-            # the eigenvector basis was arbitrary; rever to old orientation
+            # the eigenvector basis was arbitrary; revert to old orientation
             # for 'least surprise'
             new_rotation = curve.rotation
 
@@ -703,6 +748,10 @@ def transform(curve, tf):
     else:
         raise TypeError("Input `curve` should be a Path, Subpath, Line, "
                         "QuadraticBezier, CubicBezier, or Arc object.")
+
+
+def copy(curve):
+    return translate(curve, 0)
 
 
 def rotate(curve, degs, origin=0j):
@@ -1164,7 +1213,11 @@ def crop(thing, enclosure, crop_to_inside=True, debug=False):
         print("enclosure:")
         print(enclosure.__repr__(decimals=2))
 
-    intersections = thing.intersect(enclosure)
+    try:
+        intersections = thing.intersect(enclosure)
+        
+    except ValueError:
+        intersections = []
 
     if isinstance(thing, Segment):
         time_values = list({a1.t for (a1, _) in intersections})
@@ -1749,7 +1802,6 @@ def join_offset_segments_into_subpath(skeleton, offsets, putative_amount, join, 
 
             if p is not None:
                 if p.start != o1.end:
-                    # print("t1:", t1)
                     print(f"{off1.point(t1):.5f}")
                     print(f"{p.start:.5f}")
                     print(f"{off1.cropped(0, t1).end:.5f}")
@@ -3330,7 +3382,7 @@ def extract_complex(thing):
     except TypeError:
         pass
 
-    raise ValueError("Unable to extract complex number from argument")
+    raise ValueError(f"Unable to extract complex number from argument: {thing}, {type(thing)}")
 
 
 class Line(BezierSegment):
@@ -3944,6 +3996,10 @@ class Arc(Segment):
         # Note: -zp is the image of self._end under the same transformation
 
         zp = (self._start - self._end) / (2 * self.phi_unit)
+        
+        # if zp.__abs__() < 0.00001:
+        #     raise ValueError("self._start close to self._end in Arc") # recently added
+        
         xp, yp = zp.real, zp.imag
         xp_sqd, yp_sqd = xp**2, yp**2
 
@@ -3991,6 +4047,7 @@ class Arc(Segment):
         # and moreover it turns out that the correct selection of signs in
         # (*), (**) is given by the XOR of ._large_arc and ._sweep:
         Q = rx_sqd * yp_sqd + ry_sqd * xp_sqd
+        
         radicand = (rx_sqd * ry_sqd - Q) / Q
         radical = sqrt(max(0, radicand))
         cp = (rx * yp / ry - 1j * ry * xp / rx) * radical
@@ -4634,6 +4691,10 @@ class Subpath(ContinuousCurve, MutableSequence):
     def append(self, thing, wiggle_endpoints_into_place=True, bridge_discontinuity=False):
         self.splice(len(self), len(self), thing, wiggle_endpoints_into_place, bridge_discontinuity=bridge_discontinuity)
 
+    def append_and(self, thing, wiggle_endpoints_into_place=True, bridge_discontinuity=False):
+        self.append(thing, wiggle_endpoints_into_place, bridge_discontinuity)
+        return self
+
     def insert(self, index, value, bridge_discontinuity=False):  # (MutableSequence abstract class)
         if index < 0:
             index += len(self)
@@ -4683,6 +4744,14 @@ class Subpath(ContinuousCurve, MutableSequence):
 
     def prepend(self, value):
         return self.insert(0, value)
+    
+    def drop_first_segment(self):
+        assert len(self) >= 1
+        return self.splice(0, 1, None)
+
+    def drop_last_segment(self):
+        assert len(self) >= 1
+        return self.splice(len(self) - 1, len(self), None)
 
     def splice(self, start_index, end_index, value, wiggle_endpoints_into_place=True, bridge_discontinuity=False):
         """
@@ -5294,7 +5363,6 @@ class Subpath(ContinuousCurve, MutableSequence):
             if thing is None:
                 return None
             z = self.index(thing)
-            print("z:", z)
             return z
             # return None if thing is None else self.index(thing)
         except ValueError:
@@ -5629,7 +5697,6 @@ class Subpath(ContinuousCurve, MutableSequence):
                 to_return = Subpath(self[a0.segment_index].cropped(a0, a1))
             else:
                 to_return = Subpath(self[a0.segment_index].cropped(a0, 1))
-                # to_return.debug = True
                 for index in range(a0.segment_index + 1, a1.segment_index):
                     to_return.append(self[index])
                 to_return.append(self[a1.segment_index].cropped(0, a1))
@@ -5695,7 +5762,8 @@ class Subpath(ContinuousCurve, MutableSequence):
             return self
 
         if len(self) == 0:
-            raise ValueError("calling .set_Z() on empty subpath")
+            # raise ValueError("calling .set_Z() on empty subpath")
+            return self
 
         if self._Z:
             assert self.start_equals_end()
@@ -5851,9 +5919,6 @@ class Path(Curve, MutableSequence):
 
         assert all(isinstance(s, Subpath) for s in self._subpaths)
 
-    # def shortname(self):
-    #     return 'path'
-
     def first_nonempty(self):
         for index, x in enumerate(self):
             if len(x) > 0:
@@ -5901,10 +5966,20 @@ class Path(Curve, MutableSequence):
         return len(self._subpaths)
 
     def insert(self, index, value, even_if_empty=True):  # (MutableSequence abstract method)
+        assert index <= len(self._subpaths)
+        
         if not isinstance(value, Subpath):
-            raise ValueError("value not a Subpath in Path.__setitem__")
-        if len(value) > 0 or even_if_empty:
+            assert isinstance(value, Segment)
+
+            if index > 0 and value.start == self._subpaths[index - 1].end:
+                self._subpaths[index - 1].append(value)
+
+            else:
+                self._subpaths.insert(index, Subpath(value))
+
+        elif len(value) > 0 or even_if_empty:
             self._subpaths.insert(index, value)
+
         return value
 
     # provided by MutableSequence: __contains__, __iter__, __reversed__
@@ -6663,4 +6738,3 @@ class Path(Curve, MutableSequence):
             assert isinstance(path, Path)
             stroke.extend(path)
         return stroke
-

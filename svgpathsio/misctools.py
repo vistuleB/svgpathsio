@@ -372,6 +372,16 @@ def int_else_float(z):
     return int(z) if int(z) == z else z
 
 
+def real_numbers_in_2arg_version(x, y=None):
+    if y is None:
+        return real_numbers_in(x)
+    
+    assert isinstance(x, Real)
+    assert isinstance(y, Real)
+    
+    return int_else_float(x), int_else_float(y)
+
+
 def real_numbers_in(thing):
     y = None
 
