@@ -199,7 +199,6 @@ def circle_generator(center, radius):
     return Subpath(arc1, arc2)
 
 
-
 def points2lines(*points):
     if len(points) < 2:
         raise ValueError("please provide at least two points")
@@ -4365,7 +4364,7 @@ class Arc(Segment):
         return CubicBezier(start, control1, control2, end)
 
     def converted_to_bezier_subpath(self, quality=0.01, safety=5,
-                                    use_Maisonobe=True):
+                                    use_Maisonobe=True, force_one_bezier_per_segment=False):
         assert quality > 0
         safety = int(min(4, safety))
         if use_Maisonobe:
@@ -4376,7 +4375,7 @@ class Arc(Segment):
         assert other.end == self._end
         divergence = divergence_of_offset(self, other, 0, safety=safety,
                                           early_return_threshold=quality)
-        if divergence <= quality:
+        if divergence <= quality or force_one_bezier_per_segment:
             return Subpath(other), [0, 1]
         first_half, secnd_half = self.split(0.5)
         assert first_half.end == secnd_half.start
@@ -4916,6 +4915,10 @@ class Subpath(ContinuousCurve, MutableSequence):
         if self._Z:
             to_return.set_Z()
         return to_return
+    
+    def reverse_and(self):
+        self._segments = [seg.reversed() for seg in reversed(self)]
+        return self
 
     def __eq__(self, other, tol=0):
         if not isinstance(other, Subpath):
@@ -5718,7 +5721,7 @@ class Subpath(ContinuousCurve, MutableSequence):
         return to_return
 
     def converted_to_bezier(self, quality=0.01, safety=5,
-                            reuse_segments=True, use_Maisonobe=False):
+                            reuse_segments=True, use_Maisonobe=False, force_one_bezier_per_segment=False):
         """
         Warning: reuses same segments when available, unless 'reuse_segments'
         is set to False.
@@ -5730,7 +5733,8 @@ class Subpath(ContinuousCurve, MutableSequence):
                 cpath, _ = s.converted_to_bezier_subpath(
                     quality,
                     safety,
-                    use_Maisonobe=use_Maisonobe
+                    use_Maisonobe=use_Maisonobe,
+                    force_one_bezier_per_segment=force_one_bezier_per_segment
                 )
                 new_subpath.extend(cpath)
 
