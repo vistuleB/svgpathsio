@@ -158,7 +158,7 @@ def parse_subpath(*args, accept_paths=False, auto_add_M=False):
         elif command == 'Z':
             # Close path
             if len(subpath) > 0:
-                subpath.set_Z(forceful=True)
+                subpath.set_Z(bridge_discontinuity=True)
                 assert subpath.Z
                 append_to_path(subpath)
                 subpath = Subpath()

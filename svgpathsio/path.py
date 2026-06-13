@@ -201,6 +201,8 @@ def circle_generator(center, radius):
 
 def points2lines(*points):
     if len(points) < 2:
+        if len(points) == 1 and isinstance(points[0], list):
+            return points2lines(*points[0])
         raise ValueError("please provide at least two points")
 
     lines = []
@@ -220,10 +222,10 @@ def points2polyline(*points, return_subpath=False):
 
 def points2polygon(*points, return_subpath=False):
     if return_subpath:
-        return Subpath(*points2lines(*points)).set_Z(forceful=True)
+        return Subpath(*points2lines(*points)).set_Z(bridge_discontinuity=True)
 
     else:
-        return Path(Subpath(*points2lines(*points)).set_Z(forceful=True))
+        return Path(Subpath(*points2lines(*points)).set_Z(bridge_discontinuity=True))
 
 
 def bbox2subpath(xmin, xmax, ymin, ymax):
@@ -1814,7 +1816,7 @@ def join_offset_segments_into_subpath(skeleton, offsets, putative_amount, join, 
             to_return.append(o2)
         else:
             to_return[0] = o2
-            to_return.set_Z(forceful=False)
+            to_return.set_Z(bridge_discontinuity=False)
 
     assert to_return.Z == skeleton.Z
 
@@ -2541,9 +2543,15 @@ def _check_repr_options(options):
     for key, value in options.items():
         if key not in _repr_option_names:
             raise ValueError("unknown key:", key)
+
         if key == 'indent_size':
             if not isinstance(value, int):
                 raise ValueError("bad indent_size")
+
+        elif key == 'decimals':
+            if not isinstance(value, int):
+                raise ValueError("bad decimals")
+
         else:
             if not isinstance(value, bool):
                 raise ValueError("expecting bool option for key", key)
@@ -2592,7 +2600,7 @@ class Curve(object):
             cls._class_repr_options.update(options)
 
     def update_repr_options(self, options):
-        options = _parse_repr_options(cls.shortname(), options)
+        options = _parse_repr_options(self.shortname(), options)
         _check_repr_options(options)
         self._own_repr_options.update(options)
 
@@ -2971,8 +2979,8 @@ class Segment(ContinuousCurve):
 
     def last_segment(self):
         return self
-
-    def matched_end_with_start_of(self, other):
+    
+    def compute_new_end_to_match_start_of(self, other):
         other = other.first_segment()
         if other is None:
             raise ValueError("'None' segment in Segment.matched_end_with_start_of")
@@ -3013,9 +3021,9 @@ class Segment(ContinuousCurve):
         else:
             new_y = (self.end.imag + other.start.imag) * 0.5
 
-        return self.tweaked(end=new_x + 1j * new_y)
+        return new_x + 1j * new_y
 
-    def matched_start_with_end_of(self, other):
+    def compute_new_start_to_match_end_of(self, other):
         other = other.last_segment()
         if other is None:
             raise ValueError("'None' segment in Segment.matched_start_with_end_of")
@@ -3056,7 +3064,15 @@ class Segment(ContinuousCurve):
         else:
             new_y = (self.start.imag + other.end.imag) * 0.5
 
-        return self.tweaked(start=new_x + 1j * new_y)
+        return new_x + 1j * new_y
+    
+    def matched_end_with_start_of(self, other):
+        new_end = self.compute_new_end_to_match_start_of(other)
+        return self.tweaked(end=new_end)
+
+    def matched_start_with_end_of(self, other):
+        new_start = self.compute_new_start_to_match_end_of(other)
+        return self.tweaked(start=new_start)
 
     def stroke(
             self,
@@ -4621,14 +4637,14 @@ class Subpath(ContinuousCurve, MutableSequence):
     """
     _class_repr_options = _load_repr_options_for('subpath')
 
-    def __init__(self, *things, wiggle_endpoints_into_place=True):
+    def __init__(self, *things, wiggle_endpoints_into_place=True, bridge_discontinuities=False):
         self.debug = False
         self._Z = False
         self._segments = []
         self._repr_options_init()
         self._field_names = []
         for s in things:
-            self.append(s, wiggle_endpoints_into_place)  # ends up calling .insert which itself calls .splice
+            self.append(s, wiggle_endpoints_into_place, bridge_discontinuities)  # ends up calling .insert which itself calls .splice
         self._reset()
 
     def _reset(self):
@@ -4766,6 +4782,7 @@ class Subpath(ContinuousCurve, MutableSequence):
         """
         # assertions / checking
         if not isinstance(value, Curve) and value is not None:
+            print("thing: that's not a curve:", value)
             raise ValueError("expecting instance of Curve")
 
         if isinstance(value, Path) and not value.is_naively_continuous():
@@ -4823,8 +4840,7 @@ class Subpath(ContinuousCurve, MutableSequence):
                     self._segments[next_index] = next = new_next
                     value = new_value
                     assert next.start == value.end  # and...
-
-                    # reset prev, as well...
+                    # check prev:
                     prev = self.prev_segment(start_index, use_Z=True)
                     assert prev is None or prev.end == value.start
 
@@ -4915,6 +4931,9 @@ class Subpath(ContinuousCurve, MutableSequence):
         if self._Z:
             to_return.set_Z()
         return to_return
+    
+    def reverse(self):
+        return self.reverse_and()
     
     def reverse_and(self):
         self._segments = [seg.reversed() for seg in reversed(self)]
@@ -5009,6 +5028,9 @@ class Subpath(ContinuousCurve, MutableSequence):
     def start_equals_end(self):
         return len(self) > 0 and self[0].start == self[-1].end
 
+    def start_is_close_to_end(self):
+        return len(self) > 0 and np.isclose(self[0].start, self[-1].end)
+
     def is_bezier_subpath(self):
         return all(isinstance(seg, BezierSegment) for seg in self)
 
@@ -5016,34 +5038,48 @@ class Subpath(ContinuousCurve, MutableSequence):
         return any(isinstance(seg, Arc) for seg in self)
 
     def matched_end_with_start_of(self, other):
+        assert not self._Z # (recently added, see 'if self._Z' block below, if this was bad choice)
         if len(self) == 0:
             raise ValueError("Empty subpath cannot tweak its end")
         our_last = self._segments[-1]
         new_last = our_last.matched_end_with_start_of(other)
         assert np.isclose(our_last.end, new_last.end)
-
         new_segments = list(self._segments)
         new_segments[-1] = new_last
-        if self._Z:
-            new_segments[0] = new_segments[0].tweaked(start=new_last.end)
-            assert new_segments[0].start == new_segments[-1].end
-
+        # if self._Z:
+        #     new_segments[0] = new_segments[0].tweaked(start=new_last.end)
+        #     assert new_segments[0].start == new_segments[-1].end
         return Subpath(*new_segments).set_Z(following=self)
 
     def matched_start_with_end_of(self, other):
+        assert not self._Z # (recently added, see 'if self._Z' block below)
         if len(self) == 0:
             raise ValueError("Empty subpath cannot tweak its start")
         our_first = self._segments[0]
         new_first = our_first.matched_start_with_end_of(other)
         assert np.isclose(our_first.start, new_first.start)
-
         new_segments = list(self._segments)
         new_segments[0] = new_first
-        if self._Z:
-            new_segments[-1] = new_segments[-1].tweaked(end=new_first.start)
-            assert new_segments[0].start == new_segments[-1].end
-
+        # if self._Z:
+        #     new_segments[-1] = new_segments[-1].tweaked(end=new_first.start)
+        #     assert new_segments[0].start == new_segments[-1].end
         return Subpath(*new_segments).set_Z(following=self)
+
+    def match_end_with_start_of(self, other):
+        assert not self._Z
+        if len(self) == 0:
+            raise ValueError("Empty subpath cannot tweak its end")
+        our_last = self._segments[-1]
+        new_last = our_last.matched_end_with_start_of(other)
+        self._segments[-1] = new_last
+
+    def match_start_with_end_of(self, other):
+        assert not self._Z
+        if len(self) == 0:
+            raise ValueError("Empty subpath cannot tweak its start")
+        our_first = self._segments[0]
+        new_first = our_first.matched_start_with_end_of(other)
+        self._segments[0] = new_first
 
     def d(self,
           previous_segment=None,  # for use with relative coordinates
@@ -5753,13 +5789,14 @@ class Subpath(ContinuousCurve, MutableSequence):
     def to_path(self):
         return Path(self)
 
-    def set_Z(self, forceful=False, following=None):
+    # recently renamed 'bridge_discontinuity' to 'forceful'
+    def set_Z(self, wiggle_endpoints_into_place=False, bridge_discontinuity=False, following=None):
         """Set ._Z value of self to True, unless 'following' is not None, in
         which case self._Z is set to match the value of following._Z.
 
-        If 'forceful' is True, will create, if necessary, a final line
+        If 'bridge_discontinuity' is True, will create, if necessary, a final line
         joining self.start to self.end before setting ._Z to True. If
-        'forceful' is False and self.start != self.end, raises a value error.
+        'bridge_discontinuity' is False and self.start != self.end, raises a value error.
         """
         if following is not None and not following.Z:
             self._Z = False
@@ -5772,17 +5809,26 @@ class Subpath(ContinuousCurve, MutableSequence):
         if self._Z:
             assert self.start_equals_end()
             warn("Z already set is Subpath.set_Z(); ignoring")
+            return self
 
-        else:
-            if not self.start_equals_end():
-                if forceful:
-                    self.append(Line(self.end, self.start))
-                    assert self.start_equals_end()
+        if not self.start_equals_end():
+            if wiggle_endpoints_into_place and self.start_is_close_to_end():
+                first = self._segments[0]
+                last = self._segments[-1]
+                self.match_start_with_end_of(last)
+                self.match_end_with_start_of(first)
+                assert self.start_equals_end()
+            
+            elif bridge_discontinuity:
+                self.append(Line(self.end, self.start))
+                assert self.start_equals_end()
 
-                else:
-                    raise ValueError("self.end != self.start (use .set_Z(forceful=True) ?)")
+            else:
+                print("distance start to end:", abs(self.start - self.end))
+                print("self.start_is_close_to_end():", self.start_is_close_to_end())
+                raise ValueError("self.end != self.start (use .set_Z(bridge_discontinuity=True) ?)")
 
-            self._Z = True
+        self._Z = True
 
         return self
 
@@ -5892,7 +5938,7 @@ class Subpath(ContinuousCurve, MutableSequence):
             way_out.extend(c_end)
             way_in.extend(c_start)
             way_out.extend(way_in)
-            way_out.set_Z(forceful=False)
+            way_out.set_Z(bridge_discontinuity=False)
             result = Path(way_out)
 
         return result
@@ -6683,9 +6729,9 @@ class Path(Curve, MutableSequence):
     def is_empty(self):
         return all(len(s) == 0 for s in self)
 
-    def set_Z(self, forceful=False, following=None):
+    def set_Z(self, bridge_discontinuity=False, following=None):
         if len(self) == 1:
-            self[0].set_Z(forceful, following)
+            self[0].set_Z(bridge_discontinuity, following)
             return self
         raise ValueError("ambiguous set_Z command: more or less than one subpath")
 
