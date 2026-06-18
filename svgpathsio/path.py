@@ -220,12 +220,12 @@ def points2polyline(*points, return_subpath=False):
         return Path(Subpath(*points2lines(*points)))
 
 
-def points2polygon(*points, return_subpath=False):
+def points2polygon(*points, return_subpath=False, bridge_discontinuity=True):
     if return_subpath:
-        return Subpath(*points2lines(*points)).set_Z(bridge_discontinuity=True)
+        return Subpath(*points2lines(*points)).set_Z(bridge_discontinuity=bridge_discontinuity)
 
     else:
-        return Path(Subpath(*points2lines(*points)).set_Z(bridge_discontinuity=True))
+        return Path(Subpath(*points2lines(*points)).set_Z(bridge_discontinuity=bridge_discontinuity))
 
 
 def bbox2subpath(xmin, xmax, ymin, ymax):
